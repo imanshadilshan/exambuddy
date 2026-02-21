@@ -30,9 +30,11 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+    const requestUrl = originalRequest?.url || ''
+    const isAuthRequest = requestUrl.includes('/api/v1/auth/login') || requestUrl.includes('/api/v1/auth/register')
 
     // If 401 and we haven't retried yet, try to refresh token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRequest) {
       originalRequest._retry = true
 
       try {

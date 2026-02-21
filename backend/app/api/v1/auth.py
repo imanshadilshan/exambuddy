@@ -8,8 +8,10 @@ from app.database import get_db
 from app.schemas.auth import UserLogin, StudentRegister, Token
 from app.schemas.user import UserResponse
 from app.schemas.student import StudentResponse
+from app.schemas.admin import AdminResponse
 from app.models.user import User, UserRole
 from app.models.student import Student
+from app.models.admin import Admin
 from app.core.security import (
     get_password_hash,
     verify_password,
@@ -177,6 +179,15 @@ async def get_current_user_info(
                 "profile_photo_public_id": student.profile_photo_public_id,
                 "has_paid": student.has_paid,
                 "payment_verified_at": student.payment_verified_at.isoformat() if student.payment_verified_at else None
+            }
+    elif current_user.role == UserRole.ADMIN:
+        admin = db.query(Admin).filter(Admin.user_id == current_user.id).first()
+        if admin:
+            user_data["profile"] = {
+                "id": str(admin.id),
+                "full_name": admin.full_name,
+                "permissions": admin.permissions or {},
+                "created_at": admin.created_at.isoformat() if admin.created_at else None
             }
     
     # Cache the result for 5 minutes

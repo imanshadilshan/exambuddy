@@ -9,7 +9,7 @@ import { login, fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 export default function LoginPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
-  const { isAuthenticated, isLoading, error } = useAppSelector((state) => state.auth)
+  const { isAuthenticated, isLoading, error, user } = useAppSelector((state) => state.auth)
 
   const [formData, setFormData] = useState({
     email: '',
@@ -17,10 +17,15 @@ export default function LoginPage() {
   })
 
   useEffect(() => {
-    if (isAuthenticated) {
-      router.push('/')
+    if (isAuthenticated && user) {
+      // Redirect based on role
+      if (user.role === 'admin') {
+        router.push('/admin/dashboard')
+      } else {
+        router.push('/')
+      }
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, user, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -34,11 +39,22 @@ export default function LoginPage() {
     e.preventDefault()
     
     try {
-      await dispatch(login(formData)).unwrap()
-      await dispatch(fetchCurrentUser())
-      router.push('/')
-    } catch (err) {
-      console.error('Login failed:', err)
+      const loginPayload = {
+        email: formData.email.trim(),
+        password: formData.password,
+      }
+
+      await dispatch(login(loginPayload)).unwrap()
+      const userData = await dispatch(fetchCurrentUser()).unwrap()
+      
+      // Redirect based on role
+      if (userData.role === 'admin') {
+        router.push('/admin/dashboard')
+      } else {
+        router.push('/')
+      }
+    } catch (err: any) {
+      console.error('Login failed:', err || 'Unknown error')
     }
   }
 

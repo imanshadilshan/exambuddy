@@ -35,7 +35,14 @@ export const login = createAsyncThunk(
       const response = await apiLogin(credentials)
       return response
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Login failed')
+      const detail = error?.response?.data?.detail
+      const message =
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d: any) => d?.msg).filter(Boolean).join(', ')
+            : error?.message || 'Login failed'
+      return rejectWithValue(message)
     }
   }
 )
