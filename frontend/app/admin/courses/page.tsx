@@ -19,28 +19,19 @@ type Course = {
   is_active?: boolean
 }
 
-type Exam = {
-  id: string
-  course_id: string
-  title: string
-  image_url: string
-  image_public_id?: string
-  description?: string
-  duration_minutes: number
-  total_questions: number
-  is_published?: boolean
-}
-
 export default function AdminCoursesPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
 
   const [courses, setCourses] = useState<Course[]>([])
-  const [exams, setExams] = useState<Exam[]>([])
-  const [selectedCourseId, setSelectedCourseId] = useState('')
   const [error, setError] = useState('')
   const [loadingData, setLoadingData] = useState(false)
+  const [courseImageFile, setCourseImageFile] = useState<File | null>(null)
+  const [isCreatingCourse, setIsCreatingCourse] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
 
   const [courseForm, setCourseForm] = useState({
     title: '',
@@ -48,19 +39,56 @@ export default function AdminCoursesPage() {
     grade: 10,
     image_url: '',
     image_public_id: '',
-    price: 0,
+    price: '',
     description: '',
   })
 
-  const [examForm, setExamForm] = useState({
-    course_id: '',
-    title: '',
-    image_url: '',
-    image_public_id: '',
-    description: '',
-    duration_minutes: 60,
-    total_questions: 0,
-  })
+  const uploadImageToCloudinary = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('entity', 'courses')
+
+    const response = await apiClient.post('/api/v1/admin/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+
+    return {
+      image_url: response.data.image_url,
+      image_public_id: response.data.image_public_id,
+    }
+  }
+
+  const deleteImageFromCloudinary = async (publicId: string | null | undefined) => {
+    if (!publicId) return
+    try {
+      await apiClient.post('/api/v1/admin/delete-image', { public_id: publicId })
+    } catch (err: any) {
+      console.error('Failed to delete image from Cloudinary:', err)
+    }
+  }
+
+  const getErrorMessage = (err: any): string => {
+    // Handle Pydantic validation errors (object with msg field)
+    if (err?.response?.data?.detail && typeof err.response.data.detail === 'object') {
+      if (err.response.data.detail.msg) {
+        return err.response.data.detail.msg
+      }
+      // Handle validation errors that are arrays
+      if (Array.isArray(err.response.data.detail)) {
+        const messages = err.response.data.detail
+          .map((e: any) => e.msg || JSON.stringify(e))
+          .join('; ')
+        return messages || 'Validation error occurred'
+      }
+      return 'An error occurred'
+    }
+    // Handle string error messages
+    if (typeof err?.response?.data?.detail === 'string') {
+      return err.response.data.detail
+    }
+    // Fallback
+    return 'An error occurred'
+  }
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -85,14 +113,10 @@ export default function AdminCoursesPage() {
     try {
       setLoadingData(true)
       setError('')
-      const [coursesRes, examsRes] = await Promise.all([
-        apiClient.get('/api/v1/admin/courses'),
-        apiClient.get('/api/v1/admin/exams'),
-      ])
+      const coursesRes = await apiClient.get('/api/v1/admin/courses')
       setCourses(coursesRes.data)
-      setExams(examsRes.data)
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to load admin data')
+      setError(getErrorMessage(err) || 'Failed to load admin data')
     } finally {
       setLoadingData(false)
     }
@@ -102,75 +126,199 @@ export default function AdminCoursesPage() {
     e.preventDefault()
     try {
       setError('')
+      setIsCreatingCourse(true)
+
+      // Validate title
+      const title = courseForm.title ? courseForm.title.trim() : ''
+      if (!title) {
+        setError('Please enter course title')
+        setIsCreatingCourse(false)
+        return
+      }
+
+      // Validate subject
+      const subject = courseForm.subject ? courseForm.subject.trim() : ''
+      if (!subject) {
+        setError('Please enter course subject')
+        setIsCreatingCourse(false)
+        return
+      }
+
+      if (!courseForm.price) {
+        setError('Please enter a price')
+        setIsCreatingCourse(false)
+        return
+      }
+
+      const price = Number(courseForm.price)
+      if (isNaN(price) || price < 0) {
+        setError('Please enter a valid price')
+        setIsCreatingCourse(false)
+        return
+      }
+
+      // Safely prepare description
+      const description = courseForm.description ? courseForm.description.trim() : null
+      const finalDescription = description && description.length > 0 ? description : null
+
+      let imageUrl: string | null = null
+      let imagePublicId: string | null = null
+
+      // Upload image if file was selected
+      if (courseImageFile) {
+        try {
+          const uploadResult = await uploadImageToCloudinary(courseImageFile)
+          imageUrl = uploadResult.image_url || null
+          imagePublicId = uploadResult.image_public_id || null
+        } catch (err: any) {
+          setError(getErrorMessage(err) || 'Failed to upload course image')
+          setIsCreatingCourse(false)
+          return
+        }
+      }
+
       await apiClient.post('/api/v1/admin/courses', {
-        ...courseForm,
-        title: courseForm.title.trim(),
-        subject: courseForm.subject.trim(),
-        image_url: courseForm.image_url.trim(),
-        image_public_id: courseForm.image_public_id.trim() || null,
+        title: title,
+        subject: subject,
+        grade: courseForm.grade,
+        image_url: imageUrl,
+        image_public_id: imagePublicId,
+        price: price,
+        description: finalDescription,
       })
-      setCourseForm({ title: '', subject: '', grade: 10, image_url: '', image_public_id: '', price: 0, description: '' })
+
+      setCourseForm({ title: '', subject: '', grade: 10, image_url: '', image_public_id: '', price: '', description: '' })
+      setCourseImageFile(null)
+      setShowCreateModal(false)
+      setError('')
       await loadInitialData()
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to create course')
+      setError(getErrorMessage(err) || 'Failed to create course')
+    } finally {
+      setIsCreatingCourse(false)
     }
   }
 
-  const handleCreateExam = async (e: FormEvent) => {
+  const openCreateModal = () => {
+    setError('')
+    setCourseForm({ title: '', subject: '', grade: 10, image_url: '', image_public_id: '', price: '', description: '' })
+    setCourseImageFile(null)
+    setShowCreateModal(true)
+  }
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false)
+    setError('')
+    setCourseImageFile(null)
+  }
+
+  const openEditModal = (course: Course) => {
+    setError('')
+    setCourseForm({
+      title: course.title,
+      subject: course.subject,
+      grade: course.grade,
+      image_url: course.image_url || '',
+      image_public_id: course.image_public_id || '',
+      price: String(course.price),
+      description: course.description || '',
+    })
+    setCourseImageFile(null)
+    setEditingCourseId(course.id)
+    setShowEditModal(true)
+  }
+
+  const closeEditModal = () => {
+    setShowEditModal(false)
+    setError('')
+    setCourseImageFile(null)
+    setEditingCourseId(null)
+  }
+
+  const handleEditCourse = async (e: FormEvent) => {
     e.preventDefault()
-    try {
-      setError('')
-      await apiClient.post('/api/v1/admin/exams', {
-        ...examForm,
-        title: examForm.title.trim(),
-        image_url: examForm.image_url.trim(),
-        image_public_id: examForm.image_public_id.trim() || null,
-      })
-      setExamForm({ course_id: '', title: '', image_url: '', image_public_id: '', description: '', duration_minutes: 60, total_questions: 0 })
-      await loadInitialData()
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to create exam')
-    }
-  }
-
-  const handleEditCourse = async (course: Course) => {
-    const title = window.prompt('Course title', course.title)
-    if (!title) return
-    const subject = window.prompt('Subject', course.subject)
-    if (!subject) return
-    const gradeInput = window.prompt('Grade (10-13)', String(course.grade))
-    if (!gradeInput) return
-    const grade = Number(gradeInput)
-    if (Number.isNaN(grade) || grade < 10 || grade > 13) {
-      setError('Grade must be between 10 and 13')
-      return
-    }
-    const description = window.prompt('Description (optional)', course.description || '')
-    const imageUrl = window.prompt('Course image URL', course.image_url)
-    if (!imageUrl) return
-    const imagePublicId = window.prompt('Course image public_id (optional)', course.image_public_id || '')
-    const priceInput = window.prompt('Course price (LKR)', String(course.price))
-    if (!priceInput) return
-    const price = Number(priceInput)
-    if (Number.isNaN(price) || price < 0) {
-      setError('Price must be 0 or greater')
-      return
-    }
+    if (!editingCourseId) return
 
     try {
       setError('')
-      await apiClient.put(`/api/v1/admin/courses/${course.id}`, {
-        title: title.trim(),
-        subject: subject.trim(),
-        grade,
-        image_url: imageUrl.trim(),
-        image_public_id: (imagePublicId || '').trim() || null,
-        price,
-        description: description ?? '',
+      setIsCreatingCourse(true)
+
+      // Validate title
+      const title = courseForm.title ? courseForm.title.trim() : ''
+      if (!title) {
+        setError('Please enter course title')
+        setIsCreatingCourse(false)
+        return
+      }
+
+      // Validate subject
+      const subject = courseForm.subject ? courseForm.subject.trim() : ''
+      if (!subject) {
+        setError('Please enter course subject')
+        setIsCreatingCourse(false)
+        return
+      }
+
+      if (!courseForm.price) {
+        setError('Please enter a price')
+        setIsCreatingCourse(false)
+        return
+      }
+
+      const price = Number(courseForm.price)
+      if (isNaN(price) || price < 0) {
+        setError('Please enter a valid price')
+        setIsCreatingCourse(false)
+        return
+      }
+
+      // Safely prepare description
+      const description = courseForm.description ? courseForm.description.trim() : null
+      const finalDescription = description && description.length > 0 ? description : null
+
+      let imageUrl: string | null = null
+      let imagePublicId: string | null = null
+      const oldPublicId = courseForm.image_public_id
+
+      // If editing and no new image selected, keep existing image
+      if (!courseImageFile && courseForm.image_url) {
+        imageUrl = courseForm.image_url
+        imagePublicId = courseForm.image_public_id
+      }
+
+      // Upload new image if file was selected
+      if (courseImageFile) {
+        try {
+          const uploadResult = await uploadImageToCloudinary(courseImageFile)
+          imageUrl = uploadResult.image_url || null
+          imagePublicId = uploadResult.image_public_id || null
+          // Delete old image from Cloudinary if it exists
+          if (oldPublicId) {
+            await deleteImageFromCloudinary(oldPublicId)
+          }
+        } catch (err: any) {
+          setError(getErrorMessage(err) || 'Failed to upload course image')
+          setIsCreatingCourse(false)
+          return
+        }
+      }
+
+      await apiClient.put(`/api/v1/admin/courses/${editingCourseId}`, {
+        title: title,
+        subject: subject,
+        grade: courseForm.grade,
+        image_url: imageUrl,
+        image_public_id: imagePublicId,
+        price: price,
+        description: finalDescription,
       })
+
+      closeEditModal()
       await loadInitialData()
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to update course')
+      setError(getErrorMessage(err) || 'Failed to update course')
+    } finally {
+      setIsCreatingCourse(false)
     }
   }
 
@@ -180,67 +328,17 @@ export default function AdminCoursesPage() {
 
     try {
       setError('')
+      // Delete image from Cloudinary if it exists
+      if (course.image_public_id) {
+        await deleteImageFromCloudinary(course.image_public_id)
+      }
       await apiClient.delete(`/api/v1/admin/courses/${course.id}`)
       await loadInitialData()
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to delete course')
+      setError(getErrorMessage(err) || 'Failed to delete course')
     }
   }
 
-  const handleEditExam = async (exam: Exam) => {
-    const title = window.prompt('Exam title', exam.title)
-    if (!title) return
-    const durationInput = window.prompt('Duration in minutes', String(exam.duration_minutes))
-    if (!durationInput) return
-    const duration_minutes = Number(durationInput)
-    if (Number.isNaN(duration_minutes) || duration_minutes < 5 || duration_minutes > 300) {
-      setError('Duration must be between 5 and 300 minutes')
-      return
-    }
-    const questionsInput = window.prompt('Total questions', String(exam.total_questions))
-    if (!questionsInput) return
-    const total_questions = Number(questionsInput)
-    if (Number.isNaN(total_questions) || total_questions < 0) {
-      setError('Total questions must be 0 or higher')
-      return
-    }
-    const description = window.prompt('Description (optional)', exam.description || '')
-    const imageUrl = window.prompt('Exam image URL', exam.image_url)
-    if (!imageUrl) return
-    const imagePublicId = window.prompt('Exam image public_id (optional)', exam.image_public_id || '')
-
-    try {
-      setError('')
-      await apiClient.put(`/api/v1/admin/exams/${exam.id}`, {
-        title: title.trim(),
-        image_url: imageUrl.trim(),
-        image_public_id: (imagePublicId || '').trim() || null,
-        duration_minutes,
-        total_questions,
-        description: description ?? '',
-      })
-      await loadInitialData()
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to update exam')
-    }
-  }
-
-  const handleDeleteExam = async (exam: Exam) => {
-    const confirmed = window.confirm(`Delete exam "${exam.title}"?`)
-    if (!confirmed) return
-
-    try {
-      setError('')
-      await apiClient.delete(`/api/v1/admin/exams/${exam.id}`)
-      await loadInitialData()
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to delete exam')
-    }
-  }
-
-  const filteredExams = selectedCourseId
-    ? exams.filter((exam) => exam.course_id === selectedCourseId)
-    : exams
 
   if (isLoading || !user) {
     return (
@@ -265,238 +363,276 @@ export default function AdminCoursesPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {error && (
+        {error && !showCreateModal && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <form onSubmit={handleCreateCourse} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Create Course</h2>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Course title"
-              value={courseForm.title}
-              onChange={(e) => setCourseForm((prev) => ({ ...prev, title: e.target.value }))}
-              required
-            />
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Subject (e.g., Mathematics)"
-              value={courseForm.subject}
-              onChange={(e) => setCourseForm((prev) => ({ ...prev, subject: e.target.value }))}
-              required
-            />
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              value={courseForm.grade}
-              onChange={(e) => setCourseForm((prev) => ({ ...prev, grade: Number(e.target.value) }))}
-            >
-              {[10, 11, 12, 13].map((grade) => (
-                <option key={grade} value={grade}>Grade {grade}</option>
-              ))}
-            </select>
-            <textarea
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Description (optional)"
-              value={courseForm.description}
-              onChange={(e) => setCourseForm((prev) => ({ ...prev, description: e.target.value }))}
-              rows={3}
-            />
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Course image URL"
-              value={courseForm.image_url}
-              onChange={(e) => setCourseForm((prev) => ({ ...prev, image_url: e.target.value }))}
-              required
-            />
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Course image public_id (optional)"
-              value={courseForm.image_public_id}
-              onChange={(e) => setCourseForm((prev) => ({ ...prev, image_public_id: e.target.value }))}
-            />
-            <input
-              type="number"
-              min={0}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Course price (LKR)"
-              value={courseForm.price}
-              onChange={(e) => setCourseForm((prev) => ({ ...prev, price: Number(e.target.value) }))}
-              required
-            />
-            <button className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700" type="submit">
-              Create Course
-            </button>
-          </form>
-
-          <form onSubmit={handleCreateExam} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Create Exam in Course</h2>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              value={examForm.course_id}
-              onChange={(e) => setExamForm((prev) => ({ ...prev, course_id: e.target.value }))}
-              required
-            >
-              <option value="">Select Course</option>
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  Grade {course.grade} • {course.subject} • {course.title}
-                </option>
-              ))}
-            </select>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Exam title"
-              value={examForm.title}
-              onChange={(e) => setExamForm((prev) => ({ ...prev, title: e.target.value }))}
-              required
-            />
-            <textarea
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Description (optional)"
-              value={examForm.description}
-              onChange={(e) => setExamForm((prev) => ({ ...prev, description: e.target.value }))}
-              rows={3}
-            />
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Exam image URL"
-              value={examForm.image_url}
-              onChange={(e) => setExamForm((prev) => ({ ...prev, image_url: e.target.value }))}
-              required
-            />
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              placeholder="Exam image public_id (optional)"
-              value={examForm.image_public_id}
-              onChange={(e) => setExamForm((prev) => ({ ...prev, image_public_id: e.target.value }))}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="number"
-                min={5}
-                max={300}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Duration (minutes)"
-                value={examForm.duration_minutes}
-                onChange={(e) => setExamForm((prev) => ({ ...prev, duration_minutes: Number(e.target.value) }))}
-              />
-              <input
-                type="number"
-                min={0}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Total questions"
-                value={examForm.total_questions}
-                onChange={(e) => setExamForm((prev) => ({ ...prev, total_questions: Number(e.target.value) }))}
-              />
-            </div>
-            <button className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black" type="submit">
-              Create Exam
-            </button>
-          </form>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">Courses</h2>
+          <button
+            onClick={openCreateModal}
+            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
+          >
+            + Create Course
+          </button>
         </div>
 
         <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Courses and Exams</h2>
-            <select
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              value={selectedCourseId}
-              onChange={(e) => setSelectedCourseId(e.target.value)}
-            >
-              <option value="">All Courses</option>
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>{course.title}</option>
-              ))}
-            </select>
-          </div>
-
           {loadingData ? (
             <p className="text-sm text-gray-500">Loading data...</p>
+          ) : courses.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 mb-4">No courses yet</p>
+              <button
+                onClick={openCreateModal}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+              >
+                Create your first course
+              </button>
+            </div>
           ) : (
-            <div className="space-y-4">
-              {courses.map((course) => {
-                if (selectedCourseId && selectedCourseId !== course.id) return null
-                const courseExams = filteredExams.filter((exam) => exam.course_id === course.id)
-                return (
-                  <div key={course.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <img
-                          src={course.image_url}
-                          alt={course.title}
-                          className="w-16 h-12 rounded object-cover border border-gray-200"
-                        />
-                        <h3 className="font-semibold text-gray-900">
-                          Grade {course.grade} • {course.subject} • {course.title}
-                          <span className="block text-sm text-teal-700 mt-1">LKR {course.price}</span>
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {courses.map((course) => (
+                <div key={course.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+                  {course.image_url && (
+                    <img
+                      src={course.image_url}
+                      alt={course.title}
+                      className="w-full h-40 object-cover"
+                    />
+                  )}
+                  <div className="p-4">
+                    <div className="mb-2">
+                      <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{course.title}</h3>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Grade {course.grade} • {course.subject}
+                      </p>
+                    </div>
+                    {course.description && (
+                      <p className="text-xs text-gray-600 mb-3 line-clamp-2">{course.description}</p>
+                    )}
+                    <div className="mb-4">
+                      <p className="text-sm font-semibold text-teal-700">LKR {course.price}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Link
+                        href={`/admin/courses/${course.id}/exams`}
+                        className="block w-full text-center px-3 py-2 text-xs rounded-md bg-teal-100 text-teal-700 hover:bg-teal-200 font-medium"
+                      >
+                        Manage Exams
+                      </Link>
+                      <div className="flex gap-2">
                         <button
-                          className="px-2 py-1 text-xs rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          onClick={() => handleEditCourse(course)}
+                          className="flex-1 px-2 py-2 text-xs rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          onClick={() => openEditModal(course)}
                         >
                           Edit
                         </button>
                         <button
-                          className="px-2 py-1 text-xs rounded-md bg-red-100 text-red-700 hover:bg-red-200"
+                          className="flex-1 px-2 py-2 text-xs rounded-md bg-red-100 text-red-700 hover:bg-red-200"
                           onClick={() => handleDeleteCourse(course)}
                         >
                           Delete
                         </button>
                       </div>
                     </div>
-                    {course.description && <p className="text-sm text-gray-600 mt-1">{course.description}</p>}
-                    <div className="mt-3 space-y-2">
-                      {courseExams.length === 0 ? (
-                        <p className="text-sm text-gray-500">No exams yet in this course.</p>
-                      ) : (
-                        courseExams.map((exam) => (
-                          <div key={exam.id} className="bg-gray-50 rounded-md p-3 text-sm">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="flex items-start gap-3">
-                                  <img
-                                    src={exam.image_url}
-                                    alt={exam.title}
-                                    className="w-14 h-10 rounded object-cover border border-gray-200"
-                                  />
-                                  <div>
-                                    <div className="font-medium text-gray-800">{exam.title}</div>
-                                    <div className="text-gray-600">
-                                      {exam.duration_minutes} min • {exam.total_questions} questions
-                                    </div>
-                                  </div>
-                                </div>
-                                {exam.description && <div className="text-gray-500 mt-1">{exam.description}</div>}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  className="px-2 py-1 text-xs rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                  onClick={() => handleEditExam(exam)}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  className="px-2 py-1 text-xs rounded-md bg-red-100 text-red-700 hover:bg-red-200"
-                                  onClick={() => handleDeleteExam(exam)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
           )}
         </section>
       </main>
+
+      {/* Create Course Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Create Course</h2>
+              <button
+                onClick={closeCreateModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCourse} className="p-6 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+              )}
+
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Course title"
+                value={courseForm.title}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, title: e.target.value }))}
+                required
+              />
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Subject (e.g., Mathematics)"
+                value={courseForm.subject}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, subject: e.target.value }))}
+                required
+              />
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                value={courseForm.grade}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, grade: Number(e.target.value) }))}
+              >
+                {[10, 11, 12, 13].map((grade) => (
+                  <option key={grade} value={grade}>Grade {grade}</option>
+                ))}
+              </select>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Description (optional)"
+                value={courseForm.description}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, description: e.target.value }))}
+                rows={3}
+              />
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Course Image (Optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  onChange={(e) => setCourseImageFile(e.target.files?.[0] || null)}
+                />
+                {courseImageFile && (
+                  <p className="text-xs text-gray-600">Selected: {courseImageFile.name}</p>
+                )}
+              </div>
+              <input
+                type="number"
+                min={0}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Course price (LKR)"
+                value={courseForm.price}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, price: e.target.value }))}
+                required
+              />
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingCourse}
+                  className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {isCreatingCourse ? 'Creating...' : 'Create Course'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Edit Course</h2>
+              <button
+                onClick={closeEditModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleEditCourse} className="p-6 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+              )}
+
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Course title"
+                value={courseForm.title}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, title: e.target.value }))}
+                required
+              />
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Subject (e.g., Mathematics)"
+                value={courseForm.subject}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, subject: e.target.value }))}
+                required
+              />
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                value={courseForm.grade}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, grade: Number(e.target.value) }))}
+              >
+                {[10, 11, 12, 13].map((grade) => (
+                  <option key={grade} value={grade}>Grade {grade}</option>
+                ))}
+              </select>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Description (optional)"
+                value={courseForm.description}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, description: e.target.value }))}
+                rows={3}
+              />
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Course Image</label>
+                {courseForm.image_url && !courseImageFile && (
+                  <div className="flex items-center gap-3 mb-3">
+                    <img src={courseForm.image_url} alt="Current course" className="w-24 h-16 rounded object-cover border border-gray-200" />
+                    <span className="text-xs text-gray-600">Current image</span>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  onChange={(e) => setCourseImageFile(e.target.files?.[0] || null)}
+                />
+                {courseImageFile && (
+                  <p className="text-xs text-gray-600">Selected: {courseImageFile.name} (will replace current image)</p>
+                )}
+              </div>
+              <input
+                type="number"
+                min={0}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Course price (LKR)"
+                value={courseForm.price}
+                onChange={(e) => setCourseForm((prev) => ({ ...prev, price: e.target.value }))}
+                required
+              />
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingCourse}
+                  className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {isCreatingCourse ? 'Updating...' : 'Update Course'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

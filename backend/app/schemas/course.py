@@ -11,7 +11,7 @@ class CourseCreate(BaseModel):
     title: str = Field(..., min_length=2, max_length=200)
     subject: str = Field(..., min_length=2, max_length=100)
     grade: int = Field(..., ge=10, le=13)
-    image_url: str = Field(..., min_length=5, max_length=500)
+    image_url: Optional[str] = Field(default=None, min_length=5, max_length=500)
     image_public_id: Optional[str] = Field(default=None, max_length=255)
     price: int = Field(..., ge=0)
     description: Optional[str] = None
@@ -33,7 +33,7 @@ class CourseResponse(BaseModel):
     title: str
     subject: str
     grade: int
-    image_url: str
+    image_url: Optional[str]
     image_public_id: Optional[str]
     price: int
     description: Optional[str]

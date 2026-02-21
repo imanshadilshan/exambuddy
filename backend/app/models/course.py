@@ -17,7 +17,7 @@ class Course(Base):
     title = Column(String, nullable=False)
     subject = Column(String, nullable=False, index=True)
     grade = Column(Integer, nullable=False, index=True)
-    image_url = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)
     image_public_id = Column(String, nullable=True)
     price = Column(Integer, nullable=False, default=0)
     description = Column(Text, nullable=True)

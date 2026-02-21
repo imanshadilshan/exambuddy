@@ -16,7 +16,7 @@ class Exam(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String, nullable=False)
-    image_url = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)
     image_public_id = Column(String, nullable=True)
     description = Column(Text, nullable=True)
     duration_minutes = Column(Integer, nullable=False, default=60)
