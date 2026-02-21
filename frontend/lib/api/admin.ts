@@ -60,3 +60,41 @@ export const deleteImage = async (publicId: string) => {
   const response = await apiClient.post('/api/v1/admin/delete-image', { public_id: publicId })
   return response.data
 }
+
+// Question Management
+export const getQuestions = async (examId: string) => {
+  const response = await apiClient.get('/api/v1/admin/questions', {
+    params: { exam_id: examId }
+  })
+  return response.data
+}
+
+export const getQuestion = async (id: string) => {
+  const response = await apiClient.get(`/api/v1/admin/questions/${id}`)
+  return response.data
+}
+
+export const createQuestion = async (data: any) => {
+  const response = await apiClient.post('/api/v1/admin/questions', data)
+  return response.data
+}
+
+export const updateQuestion = async (id: string, data: any) => {
+  const response = await apiClient.put(`/api/v1/admin/questions/${id}`, data)
+  return response.data
+}
+
+export const deleteQuestion = async (id: string) => {
+  const response = await apiClient.delete(`/api/v1/admin/questions/${id}`)
+  return response.data
+}
+
+export const importQuestionsCSV = async (examId: string, file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  const response = await apiClient.post(`/api/v1/admin/questions/import-csv/${examId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+  return response.data
+}

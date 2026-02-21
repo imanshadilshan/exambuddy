@@ -26,6 +26,7 @@ class Exam(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     course = relationship("Course", back_populates="exams")
+    questions = relationship("Question", back_populates="exam", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Exam {self.title}>"

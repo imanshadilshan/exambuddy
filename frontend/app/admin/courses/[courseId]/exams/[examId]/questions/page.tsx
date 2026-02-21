@@ -1,0 +1,1181 @@
+'use client'
+
+import { FormEvent, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
+import { fetchCourses } from '@/lib/redux/slices/coursesSlice'
+import { fetchExams } from '@/lib/redux/slices/examsSlice'
+import { 
+  getQuestions, 
+  createQuestion, 
+  updateQuestion, 
+  deleteQuestion, 
+  importQuestionsCSV,
+  uploadImage,
+  deleteImage 
+} from '@/lib/api/admin'
+
+type Course = {
+  id: string
+  title: string
+  subject: string
+  grade: number
+}
+
+type Exam = {
+  id: string
+  course_id: string
+  title: string
+  total_questions: number
+}
+
+type QuestionOption = {
+  id?: string
+  option_text: string | null
+  option_image_url: string | null
+  option_image_public_id: string | null
+  is_correct: boolean
+  order_number: number
+}
+
+type Question = {
+  id: string
+  exam_id: string
+  question_text: string
+  question_image_url: string | null
+  question_image_public_id: string | null
+  explanation: string | null
+  order_number: number
+  options: QuestionOption[]
+}
+
+export default function QuestionsPage() {
+  const params = useParams<{ courseId: string; examId: string }>()
+  const { courseId, examId } = params
+  const router = useRouter()
+  const dispatch = useAppDispatch()
+  const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
+  const { courses } = useAppSelector((state) => state.courses)
+  const { exams } = useAppSelector((state) => state.exams)
+
+  const [course, setCourse] = useState<Course | null>(null)
+  const [exam, setExam] = useState<Exam | null>(null)
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [loadingData, setLoadingData] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+  
+  // Helper function to get number of options based on grade
+  const getNumOptions = () => {
+    if (!course) return 4 // Default to 4 options
+    return course.grade >= 12 ? 5 : 4
+  }
+  
+  // Helper function to create empty options array
+  const createEmptyOptions = (numOptions: number = 4) => {
+    return Array.from({ length: numOptions }, (_, idx) => ({
+      option_text: '',
+      option_image_url: '',
+      option_image_public_id: '',
+      is_correct: false,
+      order_number: idx + 1,
+    }))
+  }
+  
+  const [questionForm, setQuestionForm] = useState({
+    question_text: '',
+    question_image_url: '',
+    question_image_public_id: '',
+    explanation: '',
+    options: createEmptyOptions(4)
+  })
+
+  const [questionImageFile, setQuestionImageFile] = useState<File | null>(null)
+  const [optionImageFiles, setOptionImageFiles] = useState<{ [key: number]: File | null }>({})
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login')
+      return
+    }
+
+    if (!user) {
+      dispatch(fetchCurrentUser())
+      return
+    }
+
+    if (user.role !== 'admin') {
+      router.push('/')
+      return
+    }
+
+    // Load data
+    if (courses.length === 0) {
+      dispatch(fetchCourses())
+    }
+    
+    if (exams.length === 0) {
+      dispatch(fetchExams(courseId))
+    }
+
+    loadQuestions()
+  }, [isAuthenticated, user, dispatch, router, courseId, examId])
+
+  useEffect(() => {
+    // Set course and exam from Redux state
+    const foundCourse = courses.find((c) => c.id === courseId)
+    const foundExam = exams.find((e) => e.id === examId)
+    
+    if (foundCourse) setCourse(foundCourse)
+    if (foundExam) setExam(foundExam)
+  }, [courses, exams, courseId, examId])
+
+  const loadQuestions = async () => {
+    try {
+      setLoadingData(true)
+      setError('')
+      const data = await getQuestions(examId)
+      setQuestions(data)
+    } catch (err: any) {
+      setError(getErrorMessage(err) || 'Failed to load questions')
+    } finally {
+      setLoadingData(false)
+    }
+  }
+
+  const getErrorMessage = (err: any): string => {
+    if (err?.response?.data?.detail && typeof err.response.data.detail === 'object') {
+      if (err.response.data.detail.msg) {
+        return err.response.data.detail.msg
+      }
+      if (Array.isArray(err.response.data.detail)) {
+        const messages = err.response.data.detail.map((e: any) => e.msg || JSON.stringify(e)).join('; ')
+        return messages || 'Validation error occurred'
+      }
+      return 'An error occurred'
+    }
+    if (typeof err?.response?.data?.detail === 'string') {
+      return err.response.data.detail
+    }
+    return 'An error occurred'
+  }
+
+  const uploadQuestionImage = async (file: File) => {
+    const result = await uploadImage(file, 'questions')
+    return {
+      image_url: result.image_url,
+      image_public_id: result.image_public_id,
+    }
+  }
+
+  const deleteImageFromCloudinary = async (publicId: string | null | undefined) => {
+    if (!publicId) return
+    try {
+      await deleteImage(publicId)
+    } catch (err: any) {
+      console.error('Failed to delete image from Cloudinary:', err)
+    }
+  }
+
+  const handleCreateQuestion = async (e: FormEvent) => {
+    e.preventDefault()
+    try {
+      setError('')
+      setSuccess('')
+      setIsCreating(true)
+
+      // Validate question text
+      const questionText = questionForm.question_text.trim()
+      if (!questionText) {
+        setError('Please enter question text')
+        setIsCreating(false)
+        return
+      }
+
+      // Validate options
+      const validOptions = questionForm.options.filter(opt => opt.option_text.trim())
+      if (validOptions.length < 2) {
+        setError('Please provide at least 2 options')
+        setIsCreating(false)
+        return
+      }
+
+      // Validate correct answer
+      const correctOptions = questionForm.options.filter(opt => opt.is_correct)
+      if (correctOptions.length !== 1) {
+        setError('Please select exactly one correct answer')
+        setIsCreating(false)
+        return
+      }
+
+      // Upload question image if provided
+      let questionImageUrl = questionForm.question_image_url
+      let questionImagePublicId = questionForm.question_image_public_id
+
+      if (questionImageFile) {
+        try {
+          const result = await uploadQuestionImage(questionImageFile)
+          questionImageUrl = result.image_url
+          questionImagePublicId = result.image_public_id
+        } catch (err: any) {
+          setError('Failed to upload question image')
+          setIsCreating(false)
+          return
+        }
+      }
+
+      // Upload option images if provided
+      const optionsWithImages = await Promise.all(
+        questionForm.options.map(async (opt, idx) => {
+          if (optionImageFiles[idx]) {
+            try {
+              const result = await uploadQuestionImage(optionImageFiles[idx]!)
+              return {
+                ...opt,
+                option_image_url: result.image_url,
+                option_image_public_id: result.image_public_id,
+              }
+            } catch (err) {
+              console.error(`Failed to upload image for option ${idx + 1}`)
+              return opt
+            }
+          }
+          return opt
+        })
+      )
+
+      // Prepare payload
+      const payload = {
+        exam_id: examId,
+        question_text: questionText,
+        question_image_url: questionImageUrl,
+        question_image_public_id: questionImagePublicId,
+        explanation: questionForm.explanation.trim() || null,
+        order_number: questions.length + 1,
+        options: optionsWithImages.filter(opt => opt.option_text.trim()).map(opt => ({
+          option_text: opt.option_text.trim() || null,
+          option_image_url: opt.option_image_url || null,
+          option_image_public_id: opt.option_image_public_id || null,
+          is_correct: opt.is_correct,
+          order_number: opt.order_number,
+        }))
+      }
+
+      await createQuestion(payload)
+      await loadQuestions()
+      setSuccess('Question created successfully')
+      closeCreateModal()
+    } catch (err: any) {
+      setError(getErrorMessage(err) || 'Failed to create question')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleUpdateQuestion = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editingQuestionId) return
+
+    try {
+      setError('')
+      setSuccess('')
+      setIsCreating(true)
+
+      // Similar validation as create
+      const questionText = questionForm.question_text.trim()
+      if (!questionText) {
+        setError('Please enter question text')
+        setIsCreating(false)
+        return
+      }
+
+      const validOptions = questionForm.options.filter(opt => opt.option_text.trim())
+      if (validOptions.length < 2) {
+        setError('Please provide at least 2 options')
+        setIsCreating(false)
+        return
+      }
+
+      const correctOptions = questionForm.options.filter(opt => opt.is_correct)
+      if (correctOptions.length !== 1) {
+        setError('Please select exactly one correct answer')
+        setIsCreating(false)
+        return
+      }
+
+      // Upload question image if new file provided
+      let questionImageUrl = questionForm.question_image_url
+      let questionImagePublicId = questionForm.question_image_public_id
+
+      if (questionImageFile) {
+        try {
+          const result = await uploadQuestionImage(questionImageFile)
+          questionImageUrl = result.image_url
+          questionImagePublicId = result.image_public_id
+          
+          // Delete old image if exists
+          if (questionForm.question_image_public_id) {
+            await deleteImageFromCloudinary(questionForm.question_image_public_id)
+          }
+        } catch (err: any) {
+          setError('Failed to upload question image')
+          setIsCreating(false)
+          return
+        }
+      }
+
+      // Upload option images
+      const optionsWithImages = await Promise.all(
+        questionForm.options.map(async (opt, idx) => {
+          if (optionImageFiles[idx]) {
+            try {
+              const result = await uploadQuestionImage(optionImageFiles[idx]!)
+              
+              // Delete old image if exists
+              if (opt.option_image_public_id) {
+                await deleteImageFromCloudinary(opt.option_image_public_id)
+              }
+              
+              return {
+                ...opt,
+                option_image_url: result.image_url,
+                option_image_public_id: result.image_public_id,
+              }
+            } catch (err) {
+              console.error(`Failed to upload image for option ${idx + 1}`)
+              return opt
+            }
+          }
+          return opt
+        })
+      )
+
+      const payload = {
+        question_text: questionText,
+        question_image_url: questionImageUrl,
+        question_image_public_id: questionImagePublicId,
+        explanation: questionForm.explanation.trim() || null,
+        options: optionsWithImages.filter(opt => opt.option_text.trim()).map(opt => ({
+          option_text: opt.option_text.trim() || null,
+          option_image_url: opt.option_image_url || null,
+          option_image_public_id: opt.option_image_public_id || null,
+          is_correct: opt.is_correct,
+          order_number: opt.order_number,
+        }))
+      }
+
+      await updateQuestion(editingQuestionId, payload)
+      await loadQuestions()
+      setSuccess('Question updated successfully')
+      closeEditModal()
+    } catch (err: any) {
+      setError(getErrorMessage(err) || 'Failed to update question')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleDeleteQuestion = async (question: Question) => {
+    const confirmed = window.confirm(`Delete this question?`)
+    if (!confirmed) return
+
+    try {
+      setError('')
+      setSuccess('')
+      
+      // Delete images
+      if (question.question_image_public_id) {
+        await deleteImageFromCloudinary(question.question_image_public_id)
+      }
+      
+      question.options.forEach(opt => {
+        if (opt.option_image_public_id) {
+          deleteImageFromCloudinary(opt.option_image_public_id)
+        }
+      })
+      
+      await deleteQuestion(question.id)
+      await loadQuestions()
+      setSuccess('Question deleted successfully')
+    } catch (err: any) {
+      setError(getErrorMessage(err) || 'Failed to delete question')
+    }
+  }
+
+  const handleImportCSV = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!csvFile) {
+      setError('Please select a CSV file')
+      return
+    }
+
+    try {
+      setError('')
+      setSuccess('')
+      setIsCreating(true)
+
+      const result = await importQuestionsCSV(examId, csvFile)
+      await loadQuestions()
+      
+      let message = result.message
+      if (result.errors && result.errors.length > 0) {
+        message += `\n\nErrors:\n${result.errors.join('\n')}`
+      }
+      
+      setSuccess(message)
+      closeImportModal()
+    } catch (err: any) {
+      setError(getErrorMessage(err) || 'Failed to import questions')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const openCreateModal = () => {
+    setError('')
+    setSuccess('')
+    setQuestionForm({
+      question_text: '',
+      question_image_url: '',
+      question_image_public_id: '',
+      explanation: '',
+      options: createEmptyOptions(getNumOptions())
+    })
+    setQuestionImageFile(null)
+    setOptionImageFiles({})
+    setShowCreateModal(true)
+  }
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false)
+    setError('')
+    setQuestionImageFile(null)
+    setOptionImageFiles({})
+  }
+
+  const openEditModal = (question: Question) => {
+    setError('')
+    setSuccess('')
+    const numOptions = getNumOptions()
+    const currentOptions = question.options.length > 0 
+      ? question.options.map(opt => ({
+          option_text: opt.option_text || '',
+          option_image_url: opt.option_image_url || '',
+          option_image_public_id: opt.option_image_public_id || '',
+          is_correct: opt.is_correct,
+          order_number: opt.order_number
+        }))
+      : createEmptyOptions(numOptions)
+    
+    // Ensure we have the right number of options (in case grade was different when created)
+    if (currentOptions.length < numOptions) {
+      const additionalOptions = createEmptyOptions(numOptions - currentOptions.length)
+      additionalOptions.forEach((opt, idx) => {
+        opt.order_number = currentOptions.length + idx + 1
+      })
+      currentOptions.push(...additionalOptions)
+    } else if (currentOptions.length > numOptions) {
+      currentOptions.splice(numOptions)
+    }
+    
+    setQuestionForm({
+      question_text: question.question_text,
+      question_image_url: question.question_image_url || '',
+      question_image_public_id: question.question_image_public_id || '',
+      explanation: question.explanation || '',
+      options: currentOptions
+    })
+    setQuestionImageFile(null)
+    setOptionImageFiles({})
+    setEditingQuestionId(question.id)
+    setShowEditModal(true)
+  }
+
+  const closeEditModal = () => {
+    setShowEditModal(false)
+    setError('')
+    setQuestionImageFile(null)
+    setOptionImageFiles({})
+    setEditingQuestionId(null)
+  }
+
+  const openImportModal = () => {
+    setError('')
+    setSuccess('')
+    setCsvFile(null)
+    setShowImportModal(true)
+  }
+
+  const closeImportModal = () => {
+    setShowImportModal(false)
+    setError('')
+    setCsvFile(null)
+  }
+
+  if (isLoading || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600 text-lg font-semibold">Loading...</div>
+      </div>
+    )
+  }
+
+  const remainingQuestions = exam ? exam.total_questions - questions.length : 0
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">
+              Manage Questions • {exam?.title || 'Loading...'}
+            </h1>
+            {course && exam && (
+              <p className="text-xs text-gray-500">
+                {course.title} • {questions.length}/{exam.total_questions} questions created
+              </p>
+            )}
+          </div>
+          <Link 
+            href={`/admin/courses/${courseId}/exams`} 
+            className="px-4 py-2 text-sm text-teal-700 hover:bg-teal-50 rounded-lg"
+          >
+            Back to Exams
+          </Link>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm whitespace-pre-wrap">
+            {success}
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Questions</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {remainingQuestions > 0 
+                  ? `${remainingQuestions} more question${remainingQuestions !== 1 ? 's' : ''} needed`
+                  : 'All questions created'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={openImportModal}
+                className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700"
+              >
+                Import CSV
+              </button>
+              <button
+                onClick={openCreateModal}
+                className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700"
+              >
+                + Add Question
+              </button>
+            </div>
+          </div>
+
+          {loadingData ? (
+            <div className="text-center py-12 text-gray-500">Loading questions...</div>
+          ) : questions.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              No questions yet. Click "Add Question" or "Import CSV" to get started.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {questions.map((question, idx) => (
+                <div key={question.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                  {/* Question Header */}
+                  <div className="bg-gradient-to-r from-teal-50 to-blue-50 px-6 py-4 border-b border-gray-200 rounded-t-xl">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 flex-1">
+                        <div className="flex-shrink-0 w-10 h-10 bg-teal-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-gray-900 font-semibold text-base leading-relaxed">{question.question_text}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => openEditModal(question)}
+                          className="px-4 py-2 text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 border border-blue-200 rounded-lg transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteQuestion(question)}
+                          className="px-4 py-2 text-sm font-medium text-red-600 bg-white hover:bg-red-50 border border-red-200 rounded-lg transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Question Content */}
+                  <div className="p-6 space-y-4">
+                    {/* Question Image */}
+                    {question.question_image_url && (
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <img 
+                          src={question.question_image_url} 
+                          alt="Question" 
+                          className="w-full max-w-sm mx-auto rounded-lg object-contain"
+                          style={{ maxHeight: '180px' }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Options */}
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Answer Options</p>
+                      {question.options.map((opt, optIdx) => (
+                        <div 
+                          key={optIdx}
+                          className={`relative rounded-lg border-2 transition-all ${
+                            opt.is_correct 
+                              ? 'border-green-500 bg-green-50' 
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="p-4">
+                            <div className="flex items-start gap-3">
+                              {/* Option Label */}
+                              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                                opt.is_correct 
+                                  ? 'bg-green-600 text-white' 
+                                  : 'bg-gray-200 text-gray-700'
+                              }`}>
+                                {String.fromCharCode(65 + optIdx)}
+                              </div>
+                              
+                              {/* Option Content */}
+                              <div className="flex-1 min-w-0">
+                                {opt.option_text && (
+                                  <p className={`text-sm leading-relaxed ${
+                                    opt.is_correct ? 'font-medium text-gray-900' : 'text-gray-700'
+                                  }`}>
+                                    {opt.option_text}
+                                  </p>
+                                )}
+                                {opt.option_image_url && (
+                                  <div className="mt-2 bg-white rounded-lg p-2 border border-gray-200">
+                                    <img 
+                                      src={opt.option_image_url} 
+                                      alt={`Option ${String.fromCharCode(65 + optIdx)}`}
+                                      className="w-full max-w-xs rounded object-contain"
+                                      style={{ maxHeight: '100px' }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Correct Badge */}
+                              {opt.is_correct && (
+                                <div className="flex-shrink-0">
+                                  <span className="inline-flex items-center gap-1 text-xs font-semibold bg-green-600 text-white px-3 py-1.5 rounded-full shadow-sm">
+                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    Correct
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Explanation */}
+                    {question.explanation && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                          <div className="flex-1">
+                            <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide mb-1">Explanation</p>
+                            <p className="text-sm text-blue-800 leading-relaxed">{question.explanation}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Create Question</h3>
+              <button onClick={closeCreateModal} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <form onSubmit={handleCreateQuestion} className="p-6 space-y-6">
+              {error && showCreateModal && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Question Text *
+                </label>
+                <textarea
+                  value={questionForm.question_text}
+                  onChange={(e) => setQuestionForm({ ...questionForm, question_text: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  rows={3}
+                  placeholder="Enter your question here"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Question Image (Optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setQuestionImageFile(e.target.files?.[0] || null)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                />
+                {questionImageFile && (
+                  <div className="mt-3 bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-600 mb-2">Preview:</p>
+                    <img
+                      src={URL.createObjectURL(questionImageFile)}
+                      alt="Preview"
+                      className="w-full max-w-sm mx-auto rounded-lg object-contain"
+                      style={{ maxHeight: '200px' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Options (minimum 2 required) *
+                </label>
+                <div className="space-y-3">
+                  {questionForm.options.map((option, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`border-2 rounded-lg p-4 transition-all ${
+                        option.is_correct 
+                          ? 'border-green-500 bg-green-50' 
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 pt-2">
+                          <input
+                            type="radio"
+                            name="correct_answer"
+                            checked={option.is_correct}
+                            onChange={() => {
+                              const newOptions = questionForm.options.map((opt, i) => ({
+                                ...opt,
+                                is_correct: i === idx
+                              }))
+                              setQuestionForm({ ...questionForm, options: newOptions })
+                            }}
+                            className="w-5 h-5 text-teal-600 cursor-pointer"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-2">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="w-6 h-6 bg-gray-700 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                                  {String.fromCharCode(65 + idx)}
+                                </span>
+                                Option Text
+                              </span>
+                            </label>
+                            <input
+                              type="text"
+                              value={option.option_text}
+                              onChange={(e) => {
+                                const newOptions = [...questionForm.options]
+                                newOptions[idx].option_text = e.target.value
+                                setQuestionForm({ ...questionForm, options: newOptions })
+                              }}
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                              placeholder={`Enter option ${String.fromCharCode(65 + idx)} text`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-2">
+                              Option Image (Optional)
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null
+                                setOptionImageFiles({ ...optionImageFiles, [idx]: file })
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                            />
+                            {optionImageFiles[idx] && (
+                              <div className="mt-2 bg-white rounded-lg p-2 border border-gray-200">
+                                <p className="text-xs text-gray-600 mb-1">Preview:</p>
+                                <img
+                                  src={URL.createObjectURL(optionImageFiles[idx]!)}
+                                  alt={`Option ${String.fromCharCode(65 + idx)} preview`}
+                                  className="w-full max-w-xs rounded object-contain"
+                                  style={{ maxHeight: '100px' }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-3 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Click the radio button next to the correct answer
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Explanation (Optional)
+                </label>
+                <textarea
+                  value={questionForm.explanation}
+                  onChange={(e) => setQuestionForm({ ...questionForm, explanation: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  rows={3}
+                  placeholder="Explain the correct answer"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="submit"
+                  disabled={isCreating}
+                  className="px-6 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {isCreating ? 'Creating...' : 'Create Question'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  className="px-6 py-2.5 text-gray-700 text-sm font-medium hover:bg-gray-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Edit Question</h3>
+              <button onClick={closeEditModal} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <form onSubmit={handleUpdateQuestion} className="p-6 space-y-6">
+              {error && showEditModal && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Question Text *
+                </label>
+                <textarea
+                  value={questionForm.question_text}
+                  onChange={(e) => setQuestionForm({ ...questionForm, question_text: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  rows={3}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Question Image
+                </label>
+                {questionForm.question_image_url && !questionImageFile && (
+                  <div className="mb-3 bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-600 mb-2">Current Image:</p>
+                    <img 
+                      src={questionForm.question_image_url} 
+                      alt="Current" 
+                      className="w-full max-w-sm mx-auto rounded-lg object-contain" 
+                      style={{ maxHeight: '200px' }}
+                    />
+                  </div>
+                )}
+                {questionImageFile && (
+                  <div className="mb-3 bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-600 mb-2">New Image Preview:</p>
+                    <img
+                      src={URL.createObjectURL(questionImageFile)}
+                      alt="Preview"
+                      className="w-full max-w-sm mx-auto rounded-lg object-contain"
+                      style={{ maxHeight: '200px' }}
+                    />
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setQuestionImageFile(e.target.files?.[0] || null)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Upload a new image to replace the current one</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Options *
+                </label>
+                <div className="space-y-3">
+                  {questionForm.options.map((option, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`border-2 rounded-lg p-4 transition-all ${
+                        option.is_correct 
+                          ? 'border-green-500 bg-green-50' 
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 pt-2">
+                          <input
+                            type="radio"
+                            name="correct_answer"
+                            checked={option.is_correct}
+                            onChange={() => {
+                              const newOptions = questionForm.options.map((opt, i) => ({
+                                ...opt,
+                                is_correct: i === idx
+                              }))
+                              setQuestionForm({ ...questionForm, options: newOptions })
+                            }}
+                            className="w-5 h-5 text-teal-600 cursor-pointer"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-2">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="w-6 h-6 bg-gray-700 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                                  {String.fromCharCode(65 + idx)}
+                                </span>
+                                Option Text
+                              </span>
+                            </label>
+                            <input
+                              type="text"
+                              value={option.option_text || ''}
+                              onChange={(e) => {
+                                const newOptions = [...questionForm.options]
+                                newOptions[idx].option_text = e.target.value
+                                setQuestionForm({ ...questionForm, options: newOptions })
+                              }}
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                              placeholder={`Enter option ${String.fromCharCode(65 + idx)} text`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-2">
+                              Option Image (Optional)
+                            </label>
+                            {option.option_image_url && !optionImageFiles[idx] && (
+                              <div className="mb-2 bg-white rounded-lg p-2 border border-gray-200">
+                                <p className="text-xs text-gray-600 mb-1">Current Image:</p>
+                                <img 
+                                  src={option.option_image_url} 
+                                  alt={`Option ${String.fromCharCode(65 + idx)}`} 
+                                  className="w-full max-w-xs rounded object-contain" 
+                                  style={{ maxHeight: '100px' }}
+                                />
+                              </div>
+                            )}
+                            {optionImageFiles[idx] && (
+                              <div className="mb-2 bg-white rounded-lg p-2 border border-gray-200">
+                                <p className="text-xs text-gray-600 mb-1">New Image Preview:</p>
+                                <img
+                                  src={URL.createObjectURL(optionImageFiles[idx]!)}
+                                  alt={`Option ${String.fromCharCode(65 + idx)} preview`}
+                                  className="w-full max-w-xs rounded object-contain"
+                                  style={{ maxHeight: '100px' }}
+                                />
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null
+                                setOptionImageFiles({ ...optionImageFiles, [idx]: file })
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-3 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Click the radio button next to the correct answer
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Explanation
+                </label>
+                <textarea
+                  value={questionForm.explanation}
+                  onChange={(e) => setQuestionForm({ ...questionForm, explanation: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="submit"
+                  disabled={isCreating}
+                  className="px-6 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {isCreating ? 'Updating...' : 'Update Question'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="px-6 py-2.5 text-gray-700 text-sm font-medium hover:bg-gray-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import CSV Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full">
+            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Import Questions from CSV</h3>
+              <button onClick={closeImportModal} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <form onSubmit={handleImportCSV} className="p-6 space-y-6">
+              {error && showImportModal && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+              )}
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-blue-900">CSV Format</h4>
+                  <a
+                    href="/api/v1/admin/questions/csv-template"
+                    download="questions_template.csv"
+                    className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                  >
+                    Download Template
+                  </a>
+                </div>
+                <p className="text-sm text-blue-800 mb-3">
+                  Your CSV file should have the following columns:
+                </p>
+                <code className="block bg-white p-3 rounded text-xs font-mono text-gray-800 overflow-x-auto">
+                  question_text,option_a,option_b,option_c,option_d,correct_answer,explanation
+                </code>
+                <ul className="mt-3 text-sm text-blue-800 space-y-1">
+                  <li>• <strong>correct_answer</strong> should be A, B, C, or D</li>
+                  <li>• <strong>explanation</strong> is optional</li>
+                  <li>• Images cannot be imported via CSV (use manual creation or edit after import)</li>
+                </ul>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select CSV File *
+                </label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                  required
+                />
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  <strong>Note:</strong> Questions will be appended to existing questions. You can edit each question later to add images if needed.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="submit"
+                  disabled={isCreating || !csvFile}
+                  className="px-6 py-2.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {isCreating ? 'Importing...' : 'Import Questions'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeImportModal}
+                  className="px-6 py-2.5 text-gray-700 text-sm font-medium hover:bg-gray-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
