@@ -4,6 +4,8 @@ import uiReducer from './slices/uiSlice'
 import profileReducer from './slices/profileSlice'
 import papersReducer from './slices/papersSlice'
 import rankingsReducer from './slices/rankingsSlice'
+import coursesReducer from './slices/coursesSlice'
+import examsReducer from './slices/examsSlice'
 import { errorHandlingMiddleware, loadingMiddleware } from './middleware'
 
 export const store = configureStore({
@@ -13,6 +15,8 @@ export const store = configureStore({
     profile: profileReducer,
     papers: papersReducer,
     rankings: rankingsReducer,
+    courses: coursesReducer,
+    exams: examsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

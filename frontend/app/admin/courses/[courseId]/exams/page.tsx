@@ -3,9 +3,11 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import apiClient from '@/lib/api/client'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
+import { fetchCourses } from '@/lib/redux/slices/coursesSlice'
+import { fetchExams, createExam, updateExam, deleteExam } from '@/lib/redux/slices/examsSlice'
+import { uploadImage, deleteImage } from '@/lib/api/admin'
 
 type Course = {
   id: string
@@ -22,9 +24,9 @@ type Exam = {
   id: string
   course_id: string
   title: string
-  image_url: string
-  image_public_id?: string
-  description?: string
+  image_url: string | null
+  image_public_id?: string | null
+  description?: string | null
   duration_minutes: number
   total_questions: number
 }
@@ -35,11 +37,10 @@ export default function CourseExamsPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
+  const { courses } = useAppSelector((state) => state.courses)
+  const { exams, isLoading: loadingData, error: storeError } = useAppSelector((state) => state.exams)
 
-  const [course, setCourse] = useState<Course | null>(null)
-  const [exams, setExams] = useState<Exam[]>([])
-  const [error, setError] = useState('')
-  const [loadingData, setLoadingData] = useState(false)
+  const [localError, setLocalError] = useState('')
   const [examImageFile, setExamImageFile] = useState<File | null>(null)
   const [isCreatingExam, setIsCreatingExam] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -56,25 +57,21 @@ export default function CourseExamsPage() {
     total_questions: '',
   })
 
+  const error = storeError || localError
+  const course = useMemo(() => courses.find((c) => c.id === courseId), [courses, courseId])
+
   const uploadImageToCloudinary = async (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('entity', 'exams')
-
-    const response = await apiClient.post('/api/v1/admin/upload-image', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-
+    const result = await uploadImage(file, 'exams')
     return {
-      image_url: response.data.image_url,
-      image_public_id: response.data.image_public_id,
+      image_url: result.image_url,
+      image_public_id: result.image_public_id,
     }
   }
 
   const deleteImageFromCloudinary = async (publicId: string | null | undefined) => {
     if (!publicId) return
     try {
-      await apiClient.post('/api/v1/admin/delete-image', { public_id: publicId })
+      await deleteImage(publicId)
     } catch (err: any) {
       console.error('Failed to delete image from Cloudinary:', err)
     }
@@ -124,55 +121,37 @@ export default function CourseExamsPage() {
       return
     }
 
-    void loadData()
-  }, [isAuthenticated, user, dispatch, router, courseId])
-
-  const loadData = async () => {
-    try {
-      setLoadingData(true)
-      setError('')
-      const [courseRes, examsRes] = await Promise.all([
-        apiClient.get('/api/v1/admin/courses'),
-        apiClient.get('/api/v1/admin/exams', { params: { course_id: courseId } }),
-      ])
-
-      const foundCourse = (courseRes.data as Course[]).find((item) => item.id === courseId)
-      if (!foundCourse) {
-        setError('Course not found')
-        return
-      }
-
-      setCourse(foundCourse)
-      setExams(examsRes.data)
-    } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to load exams')
-    } finally {
-      setLoadingData(false)
+    // Fetch courses if not already loaded
+    if (courses.length === 0) {
+      dispatch(fetchCourses())
     }
-  }
+    
+    // Fetch exams for this course
+    dispatch(fetchExams(courseId))
+  }, [isAuthenticated, user, dispatch, router, courseId, courses.length])
 
   const handleCreateExam = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      setError('')
+      setLocalError('')
       setIsCreatingExam(true)
 
       // Validate title
       const title = examForm.title ? examForm.title.trim() : ''
       if (!title) {
-        setError('Please enter exam title')
+        setLocalError('Please enter exam title')
         setIsCreatingExam(false)
         return
       }
 
       if (!examForm.duration_hours && !examForm.duration_minutes) {
-        setError('Please enter exam duration (hours and/or minutes)')
+        setLocalError('Please enter exam duration (hours and/or minutes)')
         setIsCreatingExam(false)
         return
       }
 
       if (!examForm.total_questions) {
-        setError('Please enter total questions')
+        setLocalError('Please enter total questions')
         setIsCreatingExam(false)
         return
       }
@@ -181,7 +160,7 @@ export default function CourseExamsPage() {
       const minutes = Number(examForm.duration_minutes) || 0
       
       if (isNaN(hours) || isNaN(minutes)) {
-        setError('Please enter valid hours and minutes')
+        setLocalError('Please enter valid hours and minutes')
         setIsCreatingExam(false)
         return
       }
@@ -189,14 +168,14 @@ export default function CourseExamsPage() {
       const totalDurationMinutes = hours * 60 + minutes
 
       if (totalDurationMinutes < 1 || totalDurationMinutes > 480) {
-        setError('Duration must be between 1 minute and 8 hours')
+        setLocalError('Duration must be between 1 minute and 8 hours')
         setIsCreatingExam(false)
         return
       }
 
       const totalQuestions = Number(examForm.total_questions)
       if (isNaN(totalQuestions) || totalQuestions < 0) {
-        setError('Please enter a valid number of questions')
+        setLocalError('Please enter a valid number of questions')
         setIsCreatingExam(false)
         return
       }
@@ -215,7 +194,7 @@ export default function CourseExamsPage() {
           imageUrl = uploadResult.image_url || null
           imagePublicId = uploadResult.image_public_id || null
         } catch (err: any) {
-          setError(getErrorMessage(err) || 'Failed to upload exam image')
+          setLocalError(getErrorMessage(err) || 'Failed to upload exam image')
           setIsCreatingExam(false)
           return
         }
@@ -223,12 +202,12 @@ export default function CourseExamsPage() {
 
       // Ensure courseId is valid
       if (!courseId) {
-        setError('Course ID is missing')
+        setLocalError('Course ID is missing')
         setIsCreatingExam(false)
         return
       }
 
-      await apiClient.post('/api/v1/admin/exams', {
+      await dispatch(createExam({
         course_id: String(courseId),
         title: title,
         image_url: imageUrl,
@@ -236,7 +215,8 @@ export default function CourseExamsPage() {
         description: finalDescription,
         duration_minutes: totalDurationMinutes,
         total_questions: Math.floor(totalQuestions),
-      })
+      })).unwrap()
+
       setExamForm({
         title: '',
         image_url: '',
@@ -248,17 +228,16 @@ export default function CourseExamsPage() {
       })
       setExamImageFile(null)
       setShowCreateModal(false)
-      setError('')
-      await loadData()
+      setLocalError('')
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to create exam')
+      setLocalError(getErrorMessage(err) || 'Failed to create exam')
     } finally {
       setIsCreatingExam(false)
     }
   }
 
   const openCreateModal = () => {
-    setError('')
+    setLocalError('')
     setExamForm({
       title: '',
       image_url: '',
@@ -274,12 +253,12 @@ export default function CourseExamsPage() {
 
   const closeCreateModal = () => {
     setShowCreateModal(false)
-    setError('')
+    setLocalError('')
     setExamImageFile(null)
   }
 
   const openEditModal = (exam: Exam) => {
-    setError('')
+    setLocalError('')
     const hours = Math.floor(exam.duration_minutes / 60)
     const minutes = exam.duration_minutes % 60
     setExamForm({
@@ -298,7 +277,7 @@ export default function CourseExamsPage() {
 
   const closeEditModal = () => {
     setShowEditModal(false)
-    setError('')
+    setLocalError('')
     setExamImageFile(null)
     setEditingExamId(null)
   }
@@ -308,25 +287,25 @@ export default function CourseExamsPage() {
     if (!editingExamId) return
 
     try {
-      setError('')
+      setLocalError('')
       setIsCreatingExam(true)
 
       // Validate title
       const title = examForm.title ? examForm.title.trim() : ''
       if (!title) {
-        setError('Please enter exam title')
+        setLocalError('Please enter exam title')
         setIsCreatingExam(false)
         return
       }
 
       if (!examForm.duration_hours && !examForm.duration_minutes) {
-        setError('Please enter exam duration (hours and/or minutes)')
+        setLocalError('Please enter exam duration (hours and/or minutes)')
         setIsCreatingExam(false)
         return
       }
 
       if (!examForm.total_questions) {
-        setError('Please enter total questions')
+        setLocalError('Please enter total questions')
         setIsCreatingExam(false)
         return
       }
@@ -335,7 +314,7 @@ export default function CourseExamsPage() {
       const minutes = Number(examForm.duration_minutes) || 0
       
       if (isNaN(hours) || isNaN(minutes)) {
-        setError('Please enter valid hours and minutes')
+        setLocalError('Please enter valid hours and minutes')
         setIsCreatingExam(false)
         return
       }
@@ -343,14 +322,14 @@ export default function CourseExamsPage() {
       const totalDurationMinutes = hours * 60 + minutes
 
       if (totalDurationMinutes < 1 || totalDurationMinutes > 480) {
-        setError('Duration must be between 1 minute and 8 hours')
+        setLocalError('Duration must be between 1 minute and 8 hours')
         setIsCreatingExam(false)
         return
       }
 
       const totalQuestions = Number(examForm.total_questions)
       if (isNaN(totalQuestions) || totalQuestions < 0) {
-        setError('Please enter a valid number of questions')
+        setLocalError('Please enter a valid number of questions')
         setIsCreatingExam(false)
         return
       }
@@ -380,25 +359,27 @@ export default function CourseExamsPage() {
             await deleteImageFromCloudinary(oldPublicId)
           }
         } catch (err: any) {
-          setError(getErrorMessage(err) || 'Failed to upload exam image')
+          setLocalError(getErrorMessage(err) || 'Failed to upload exam image')
           setIsCreatingExam(false)
           return
         }
       }
 
-      await apiClient.put(`/api/v1/admin/exams/${editingExamId}`, {
-        title: title,
-        image_url: imageUrl,
-        image_public_id: imagePublicId,
-        description: finalDescription,
-        duration_minutes: totalDurationMinutes,
-        total_questions: Math.floor(totalQuestions),
-      })
+      await dispatch(updateExam({
+        id: editingExamId,
+        data: {
+          title: title,
+          image_url: imageUrl,
+          image_public_id: imagePublicId,
+          description: finalDescription,
+          duration_minutes: totalDurationMinutes,
+          total_questions: Math.floor(totalQuestions),
+        }
+      })).unwrap()
 
       closeEditModal()
-      await loadData()
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to update exam')
+      setLocalError(getErrorMessage(err) || 'Failed to update exam')
     } finally {
       setIsCreatingExam(false)
     }
@@ -409,15 +390,14 @@ export default function CourseExamsPage() {
     if (!confirmed) return
 
     try {
-      setError('')
+      setLocalError('')
       // Delete image from Cloudinary if it exists
       if (exam.image_public_id) {
         await deleteImageFromCloudinary(exam.image_public_id)
       }
-      await apiClient.delete(`/api/v1/admin/exams/${exam.id}`)
-      await loadData()
+      await dispatch(deleteExam(exam.id)).unwrap()
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to delete exam')
+      setLocalError(getErrorMessage(err) || 'Failed to delete exam')
     }
   }
 

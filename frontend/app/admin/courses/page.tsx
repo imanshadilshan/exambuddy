@@ -3,19 +3,20 @@
 import { FormEvent, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import apiClient from '@/lib/api/client'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
+import { fetchCourses, createCourse, updateCourse, deleteCourse, clearError } from '@/lib/redux/slices/coursesSlice'
+import { uploadImage, deleteImage } from '@/lib/api/admin'
 
 type Course = {
   id: string
   title: string
   subject: string
   grade: number
-  image_url: string
-  image_public_id?: string
+  image_url: string | null
+  image_public_id?: string | null
   price: number
-  description?: string
+  description?: string | null
   is_active?: boolean
 }
 
@@ -23,10 +24,9 @@ export default function AdminCoursesPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
+  const { courses, isLoading: loadingData, error: storeError } = useAppSelector((state) => state.courses)
 
-  const [courses, setCourses] = useState<Course[]>([])
-  const [error, setError] = useState('')
-  const [loadingData, setLoadingData] = useState(false)
+  const [localError, setLocalError] = useState('')
   const [courseImageFile, setCourseImageFile] = useState<File | null>(null)
   const [isCreatingCourse, setIsCreatingCourse] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -43,25 +43,20 @@ export default function AdminCoursesPage() {
     description: '',
   })
 
+  const error = storeError || localError
+
   const uploadImageToCloudinary = async (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('entity', 'courses')
-
-    const response = await apiClient.post('/api/v1/admin/upload-image', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-
+    const result = await uploadImage(file, 'courses')
     return {
-      image_url: response.data.image_url,
-      image_public_id: response.data.image_public_id,
+      image_url: result.image_url,
+      image_public_id: result.image_public_id,
     }
   }
 
   const deleteImageFromCloudinary = async (publicId: string | null | undefined) => {
     if (!publicId) return
     try {
-      await apiClient.post('/api/v1/admin/delete-image', { public_id: publicId })
+      await deleteImage(publicId)
     } catch (err: any) {
       console.error('Failed to delete image from Cloudinary:', err)
     }
@@ -106,32 +101,19 @@ export default function AdminCoursesPage() {
       return
     }
 
-    void loadInitialData()
+    dispatch(fetchCourses())
   }, [isAuthenticated, user, dispatch, router])
-
-  const loadInitialData = async () => {
-    try {
-      setLoadingData(true)
-      setError('')
-      const coursesRes = await apiClient.get('/api/v1/admin/courses')
-      setCourses(coursesRes.data)
-    } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to load admin data')
-    } finally {
-      setLoadingData(false)
-    }
-  }
 
   const handleCreateCourse = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      setError('')
+      setLocalError('')
       setIsCreatingCourse(true)
 
       // Validate title
       const title = courseForm.title ? courseForm.title.trim() : ''
       if (!title) {
-        setError('Please enter course title')
+        setLocalError('Please enter course title')
         setIsCreatingCourse(false)
         return
       }
@@ -139,20 +121,20 @@ export default function AdminCoursesPage() {
       // Validate subject
       const subject = courseForm.subject ? courseForm.subject.trim() : ''
       if (!subject) {
-        setError('Please enter course subject')
+        setLocalError('Please enter course subject')
         setIsCreatingCourse(false)
         return
       }
 
       if (!courseForm.price) {
-        setError('Please enter a price')
+        setLocalError('Please enter a price')
         setIsCreatingCourse(false)
         return
       }
 
       const price = Number(courseForm.price)
       if (isNaN(price) || price < 0) {
-        setError('Please enter a valid price')
+        setLocalError('Please enter a valid price')
         setIsCreatingCourse(false)
         return
       }
@@ -171,13 +153,13 @@ export default function AdminCoursesPage() {
           imageUrl = uploadResult.image_url || null
           imagePublicId = uploadResult.image_public_id || null
         } catch (err: any) {
-          setError(getErrorMessage(err) || 'Failed to upload course image')
+          setLocalError(getErrorMessage(err) || 'Failed to upload course image')
           setIsCreatingCourse(false)
           return
         }
       }
 
-      await apiClient.post('/api/v1/admin/courses', {
+      await dispatch(createCourse({
         title: title,
         subject: subject,
         grade: courseForm.grade,
@@ -185,22 +167,21 @@ export default function AdminCoursesPage() {
         image_public_id: imagePublicId,
         price: price,
         description: finalDescription,
-      })
+      })).unwrap()
 
       setCourseForm({ title: '', subject: '', grade: 10, image_url: '', image_public_id: '', price: '', description: '' })
       setCourseImageFile(null)
       setShowCreateModal(false)
-      setError('')
-      await loadInitialData()
+      setLocalError('')
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to create course')
+      setLocalError(getErrorMessage(err) || 'Failed to create course')
     } finally {
       setIsCreatingCourse(false)
     }
   }
 
   const openCreateModal = () => {
-    setError('')
+    setLocalError('')
     setCourseForm({ title: '', subject: '', grade: 10, image_url: '', image_public_id: '', price: '', description: '' })
     setCourseImageFile(null)
     setShowCreateModal(true)
@@ -208,12 +189,12 @@ export default function AdminCoursesPage() {
 
   const closeCreateModal = () => {
     setShowCreateModal(false)
-    setError('')
+    setLocalError('')
     setCourseImageFile(null)
   }
 
   const openEditModal = (course: Course) => {
-    setError('')
+    setLocalError('')
     setCourseForm({
       title: course.title,
       subject: course.subject,
@@ -230,7 +211,7 @@ export default function AdminCoursesPage() {
 
   const closeEditModal = () => {
     setShowEditModal(false)
-    setError('')
+    setLocalError('')
     setCourseImageFile(null)
     setEditingCourseId(null)
   }
@@ -240,13 +221,13 @@ export default function AdminCoursesPage() {
     if (!editingCourseId) return
 
     try {
-      setError('')
+      setLocalError('')
       setIsCreatingCourse(true)
 
       // Validate title
       const title = courseForm.title ? courseForm.title.trim() : ''
       if (!title) {
-        setError('Please enter course title')
+        setLocalError('Please enter course title')
         setIsCreatingCourse(false)
         return
       }
@@ -254,20 +235,20 @@ export default function AdminCoursesPage() {
       // Validate subject
       const subject = courseForm.subject ? courseForm.subject.trim() : ''
       if (!subject) {
-        setError('Please enter course subject')
+        setLocalError('Please enter course subject')
         setIsCreatingCourse(false)
         return
       }
 
       if (!courseForm.price) {
-        setError('Please enter a price')
+        setLocalError('Please enter a price')
         setIsCreatingCourse(false)
         return
       }
 
       const price = Number(courseForm.price)
       if (isNaN(price) || price < 0) {
-        setError('Please enter a valid price')
+        setLocalError('Please enter a valid price')
         setIsCreatingCourse(false)
         return
       }
@@ -297,26 +278,28 @@ export default function AdminCoursesPage() {
             await deleteImageFromCloudinary(oldPublicId)
           }
         } catch (err: any) {
-          setError(getErrorMessage(err) || 'Failed to upload course image')
+          setLocalError(getErrorMessage(err) || 'Failed to upload course image')
           setIsCreatingCourse(false)
           return
         }
       }
 
-      await apiClient.put(`/api/v1/admin/courses/${editingCourseId}`, {
-        title: title,
-        subject: subject,
-        grade: courseForm.grade,
-        image_url: imageUrl,
-        image_public_id: imagePublicId,
-        price: price,
-        description: finalDescription,
-      })
+      await dispatch(updateCourse({
+        id: editingCourseId,
+        data: {
+          title: title,
+          subject: subject,
+          grade: courseForm.grade,
+          image_url: imageUrl,
+          image_public_id: imagePublicId,
+          price: price,
+          description: finalDescription,
+        }
+      })).unwrap()
 
       closeEditModal()
-      await loadInitialData()
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to update course')
+      setLocalError(getErrorMessage(err) || 'Failed to update course')
     } finally {
       setIsCreatingCourse(false)
     }
@@ -327,15 +310,14 @@ export default function AdminCoursesPage() {
     if (!confirmed) return
 
     try {
-      setError('')
+      setLocalError('')
       // Delete image from Cloudinary if it exists
       if (course.image_public_id) {
         await deleteImageFromCloudinary(course.image_public_id)
       }
-      await apiClient.delete(`/api/v1/admin/courses/${course.id}`)
-      await loadInitialData()
+      await dispatch(deleteCourse(course.id)).unwrap()
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to delete course')
+      setLocalError(getErrorMessage(err) || 'Failed to delete course')
     }
   }
 
