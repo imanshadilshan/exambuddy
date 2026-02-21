@@ -1,1 +1,15 @@
 .env
+node_modules/
+dist/
+.next/
+out/
+build/
+*.log
+.DS_Store
+Thumbs.db
+pycache/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
