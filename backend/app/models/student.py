@@ -24,6 +24,7 @@ class Student(Base):
     district = Column(String, nullable=False)
     grade = Column(Integer, nullable=False)  # 10, 11, 12, 13
     profile_photo_url = Column(String, nullable=True)
+    profile_photo_public_id = Column(String, nullable=True)  # Cloudinary public_id for easy deletion/updates
     has_paid = Column(Boolean, default=False)
     payment_verified_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -18,7 +18,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/dashboard')
+      router.push('/')
     }
   }, [isAuthenticated, router])
 
@@ -36,7 +36,7 @@ export default function LoginPage() {
     try {
       await dispatch(login(formData)).unwrap()
       await dispatch(fetchCurrentUser())
-      router.push('/dashboard')
+      router.push('/')
     } catch (err) {
       console.error('Login failed:', err)
     }
@@ -48,12 +48,12 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="mb-10">
-            <div className="flex items-center gap-3 mb-8">
+            <Link href="/" className="flex items-center gap-3 mb-8 hover:opacity-80 transition-opacity inline-flex">
               <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center text-xl">
                 🎓
               </div>
               <h2 className="text-xl font-bold text-gray-900">ExamBuddy</h2>
-            </div>
+            </Link>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Welcome Back!
             </h1>

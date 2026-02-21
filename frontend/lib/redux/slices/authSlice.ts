@@ -22,7 +22,7 @@ const initialState: AuthState = {
   user: null,
   accessToken: typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null,
   refreshToken: typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null,
-  isAuthenticated: false,
+  isAuthenticated: typeof window !== 'undefined' ? !!localStorage.getItem('accessToken') : false,
   isLoading: false,
   error: null,
 }

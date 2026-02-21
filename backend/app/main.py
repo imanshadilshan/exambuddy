@@ -3,19 +3,46 @@ ExamBuddy FastAPI Application
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from app.config import settings
 from app.api.v1 import api_router
 from app.database import Base, engine
+from app.core.cache import cache, close_redis
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    # Startup
+    print("🚀 Starting ExamBuddy API...")
+    
+    # Create database tables
+    Base.metadata.create_all(bind=engine)
+    print("✅ Database tables created")
+    
+    # Initialize Redis cache
+    try:
+        await cache.initialize()
+        print("✅ Redis cache initialized")
+    except Exception as e:
+        print(f"⚠️  Redis initialization failed: {e}")
+        print("   Application will continue without caching")
+    
+    yield
+    
+    # Shutdown
+    print("🛑 Shutting down ExamBuddy API...")
+    await close_redis()
+    print("✅ Redis connection closed")
+
 
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
     description="Educational platform for O/L and A/L students with MCQ papers and ranking system",
-    debug=settings.DEBUG
+    debug=settings.DEBUG,
+    lifespan=lifespan
 )
 
 # Configure CORS
@@ -43,8 +70,17 @@ def root():
 
 
 @app.get("/health")
-def health_check():
+async def health_check():
     """Health check endpoint"""
+    redis_status = "healthy"
+    try:
+        await cache.initialize()
+        redis_connected = await cache.client.ping() if cache.client else False
+        if not redis_connected:
+            redis_status = "disconnected"
+    except Exception:
+        redis_status = "unavailable"
+    
     return {
         "status": "healthy",
         "app": settings.APP_NAME,

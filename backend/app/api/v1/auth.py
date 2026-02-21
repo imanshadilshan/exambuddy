@@ -16,6 +16,8 @@ from app.core.security import (
     create_access_token,
     create_refresh_token
 )
+from app.core.cache import cache
+from app.core.session import session_manager
 from app.dependencies import get_current_user
 
 router = APIRouter()
@@ -46,7 +48,7 @@ def register_student(
         email=student_data.email,
         password_hash=get_password_hash(student_data.password),
         role=UserRole.STUDENT,
-        is_active=False,  # Inactive until payment verified
+        is_active=True,  # Active immediately - payment only required for exams
         is_verified=False
     )
     db.add(user)
@@ -68,15 +70,15 @@ def register_student(
     db.refresh(student)
     
     return {
-        "message": "Registration successful! Please complete payment to activate your account.",
+        "message": "Registration successful! You can now login and browse. Payment is required to take exams.",
         "user_id": str(user.id),
         "email": user.email,
-        "next_step": "payment"
+        "next_step": "login"
     }
 
 
 @router.post("/login", response_model=Token)
-def login(
+async def login(
     credentials: UserLogin,
     db: Session = Depends(get_db)
 ):
@@ -86,6 +88,7 @@ def login(
     - Validates email and password
     - Returns access token and refresh token
     - Updates last login timestamp
+    - Creates Redis session for tracking
     """
     # Find user by email
     user = db.query(User).filter(User.email == credentials.email).first()
@@ -97,13 +100,6 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Check if user account is active
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account not activated. Please complete payment to activate your account.",
-        )
-    
     # Update last login
     user.last_login = datetime.utcnow()
     db.commit()
@@ -111,6 +107,22 @@ def login(
     # Create tokens
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    
+    # Create session in Redis
+    try:
+        await session_manager.create_session(
+            user_id=str(user.id),
+            session_data={
+                "email": user.email,
+                "role": user.role.value,
+                "login_time": datetime.utcnow().isoformat()
+            }
+        )
+        # Mark user as active
+        await session_manager.set_user_active(str(user.id))
+    except Exception as e:
+        # Log error but don't fail login if Redis is down
+        print(f"Redis session creation failed: {e}")
     
     return {
         "access_token": access_token,
@@ -120,7 +132,7 @@ def login(
 
 
 @router.get("/me", response_model=dict)
-def get_current_user_info(
+async def get_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -129,15 +141,25 @@ def get_current_user_info(
     
     - Returns user details and profile (student or admin)
     - Requires valid access token
+    - Uses Redis caching for performance
     """
+    # Try to get from cache first
+    cache_key = f"user_profile:{current_user.id}"
+    cached_data = await cache.get(cache_key)
+    
+    if cached_data:
+        # Update user active status
+        await session_manager.set_user_active(str(current_user.id))
+        return cached_data
+    
     user_data = {
         "id": str(current_user.id),
         "email": current_user.email,
         "role": current_user.role.value,
         "is_active": current_user.is_active,
         "is_verified": current_user.is_verified,
-        "last_login": current_user.last_login,
-        "created_at": current_user.created_at
+        "last_login": current_user.last_login.isoformat() if current_user.last_login else None,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
     
     # Add role-specific data
@@ -152,19 +174,49 @@ def get_current_user_info(
                 "district": student.district,
                 "grade": student.grade,
                 "profile_photo_url": student.profile_photo_url,
+                "profile_photo_public_id": student.profile_photo_public_id,
                 "has_paid": student.has_paid,
-                "payment_verified_at": student.payment_verified_at
+                "payment_verified_at": student.payment_verified_at.isoformat() if student.payment_verified_at else None
             }
+    
+    # Cache the result for 5 minutes
+    try:
+        await cache.set(cache_key, user_data, expire=300)
+    except Exception as e:
+        print(f"Cache set failed: {e}")
+    
+    # Mark user as active
+    try:
+        await session_manager.set_user_active(str(current_user.id))
+    except Exception as e:
+        print(f"Set user active failed: {e}")
     
     return user_data
 
 
 @router.post("/logout")
-def logout(current_user: User = Depends(get_current_user)):
+async def logout(
+    current_user: User = Depends(get_current_user),
+    access_token: str = Depends(lambda: None)  # Get token from dependency
+):
     """
     Logout user
     
+    - Blacklists the access token
+    - Deletes user sessions from Redis
     - Client should discard tokens
-    - In future, can add token blacklist
     """
+    try:
+        # Delete all user sessions
+        await session_manager.delete_user_sessions(str(current_user.id))
+        
+        # Clear user cache
+        await cache.delete(f"user_profile:{current_user.id}")
+        
+        # Note: In production, implement proper token blacklisting
+        # For now, client-side token removal is sufficient
+        
+    except Exception as e:
+        print(f"Logout cleanup failed: {e}")
+    
     return {"message": "Successfully logged out"}

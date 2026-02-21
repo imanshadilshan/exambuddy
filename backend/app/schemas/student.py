@@ -26,6 +26,7 @@ class StudentResponse(BaseModel):
     district: str
     grade: int
     profile_photo_url: Optional[str]
+    profile_photo_public_id: Optional[str]
     has_paid: bool
     payment_verified_at: Optional[datetime]
     created_at: datetime

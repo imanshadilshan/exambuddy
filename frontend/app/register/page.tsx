@@ -83,12 +83,12 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8 py-12">
       <div className="bg-white rounded-lg shadow-lg p-8 md:p-12 max-w-4xl w-full">
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-6">
+          <Link href="/" className="flex items-center gap-3 mb-6 hover:opacity-80 transition-opacity inline-flex">
             <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center text-xl">
               🎓
             </div>
             <h2 className="text-xl font-bold text-gray-900">ExamBuddy</h2>
-          </div>
+          </Link>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Create Your Account
           </h1>
