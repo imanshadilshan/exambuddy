@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { logout } from '@/lib/redux/slices/authSlice'
+import { getInitials } from '@/lib/utils/initials'
 
 export default function ProfileDropdown() {
   const [isOpen, setIsOpen] = useState(false)
@@ -29,16 +30,6 @@ export default function ProfileDropdown() {
     dispatch(logout())
     setIsOpen(false)
     router.push('/')
-  }
-
-  const getInitials = (name?: string, email?: string) => {
-    if (name) {
-      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    }
-    if (email) {
-      return email.slice(0, 2).toUpperCase()
-    }
-    return 'U'
   }
 
   const displayName = user?.profile?.full_name || user?.email?.split('@')[0] || 'User'

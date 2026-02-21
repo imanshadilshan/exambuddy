@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 import Navbar from '@/components/Navbar'
+import { getInitials } from '@/lib/utils/initials'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -29,16 +30,6 @@ export default function ProfilePage() {
         </div>
       </div>
     )
-  }
-
-  const getInitials = (name?: string, email?: string) => {
-    if (name) {
-      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    }
-    if (email) {
-      return email.slice(0, 2).toUpperCase()
-    }
-    return 'U'
   }
 
   const initials = getInitials(user?.profile?.full_name, user?.email)
