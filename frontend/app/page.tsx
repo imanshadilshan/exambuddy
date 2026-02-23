@@ -1,11 +1,8 @@
 import Link from 'next/link'
-import Navbar from '@/components/Navbar'
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-white">
-      <Navbar />
-
       {/* Hero Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -22,10 +19,10 @@ export default function Home() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
-                  href="/register"
-                  className="px-8 py-4 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors text-center"
+                  href="/student/courses"
+                  className="px-8 py-4 bg-white border-2 border-teal-600 text-teal-700 rounded-lg font-semibold hover:bg-teal-50 transition-colors text-center"
                 >
-                  Start Free Trial
+                  Browse Courses
                 </Link>
                 <Link
                   href="#features"

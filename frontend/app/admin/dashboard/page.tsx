@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { fetchCurrentUser, logout } from '@/lib/redux/slices/authSlice'
+import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -22,11 +22,6 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, user, dispatch, router])
 
-  const handleLogout = () => {
-    dispatch(logout())
-    router.push('/')
-  }
-
   if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -40,35 +35,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Admin Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center text-lg">
-                🎓
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">ExamBuddy Admin</h1>
-                <p className="text-xs text-gray-500">Master Control Panel</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user.profile?.full_name}</p>
-                <p className="text-xs text-gray-500">Administrator</p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}

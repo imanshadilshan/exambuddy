@@ -4,6 +4,7 @@ import './globals.css'
 import { Providers } from '@/lib/redux/provider'
 import NotificationManager from '@/components/NotificationManager'
 import AuthInitializer from '@/components/AuthInitializer'
+import Navbar from '@/components/Navbar'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -22,6 +23,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <AuthInitializer />
+          <Navbar />
           {children}
           <NotificationManager />
         </Providers>

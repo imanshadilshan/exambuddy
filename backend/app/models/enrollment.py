@@ -17,6 +17,10 @@ class EnrollmentStatus(enum.Enum):
     SUSPENDED = "suspended"
 
 
+def enum_values(enum_cls):
+    return [member.value for member in enum_cls]
+
+
 class CourseEnrollment(Base):
     """Full course enrollment - gives access to all exams"""
     __tablename__ = "course_enrollments"
@@ -25,7 +29,11 @@ class CourseEnrollment(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     payment_id = Column(UUID(as_uuid=True), ForeignKey("payments.id", ondelete="SET NULL"), nullable=True)
-    status = Column(SQLEnum(EnrollmentStatus), default=EnrollmentStatus.ACTIVE, nullable=False)
+    status = Column(
+        SQLEnum(EnrollmentStatus, values_callable=enum_values, name="enrollment_status"),
+        default=EnrollmentStatus.ACTIVE,
+        nullable=False,
+    )
     enrolled_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -43,7 +51,11 @@ class ExamEnrollment(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     exam_id = Column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"), nullable=False, index=True)
     payment_id = Column(UUID(as_uuid=True), ForeignKey("payments.id", ondelete="SET NULL"), nullable=True)
-    status = Column(SQLEnum(EnrollmentStatus), default=EnrollmentStatus.ACTIVE, nullable=False)
+    status = Column(
+        SQLEnum(EnrollmentStatus, values_callable=enum_values, name="enrollment_status"),
+        default=EnrollmentStatus.ACTIVE,
+        nullable=False,
+    )
     enrolled_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=True)
 

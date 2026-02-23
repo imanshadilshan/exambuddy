@@ -39,6 +39,12 @@ export default function CourseOverviewPage() {
 
   const handleEnrollFreeExam = async (examId: string) => {
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+      if (!token) {
+        router.push('/login')
+        return
+      }
+
       setEnrolling(examId)
       setError('')
       await studentApi.enrollFreeExam(examId)

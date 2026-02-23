@@ -34,6 +34,37 @@ export interface EnrollmentResponse {
   enrollment_type?: string
 }
 
+export interface EnrolledCourseItem {
+  enrollment_id: string
+  course: {
+    id: string
+    title: string
+    subject: string
+    grade: number
+    image_url: string | null
+    price: number
+  }
+  enrolled_at: string
+}
+
+export interface EnrolledExamItem {
+  enrollment_id: string
+  exam: {
+    id: string
+    title: string
+    duration_minutes: number
+    total_questions: number
+    image_url: string | null
+    price: number
+  }
+  enrolled_at: string
+}
+
+export interface MyEnrollmentsResponse {
+  courses: EnrolledCourseItem[]
+  exams: EnrolledExamItem[]
+}
+
 // Get all available courses
 export const getAvailableCourses = async (): Promise<Course[]> => {
   const response = await apiClient.get('/api/v1/student/courses')
@@ -61,7 +92,7 @@ export const enrollFreeExam = async (examId: string): Promise<EnrollmentResponse
 // Get my enrollments
 export const getMyEnrollments = async () => {
   const response = await apiClient.get('/api/v1/student/my-enrollments')
-  return response.data
+  return response.data as MyEnrollmentsResponse
 }
 
 // Check exam access

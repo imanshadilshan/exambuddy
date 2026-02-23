@@ -1,15 +1,18 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import Navbar from '@/components/Navbar'
+import * as studentApi from '@/lib/api/student'
 
 export default function DashboardPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
+  const [enrollments, setEnrollments] = useState<studentApi.MyEnrollmentsResponse>({ courses: [], exams: [] })
+  const [loadingEnrollments, setLoadingEnrollments] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -18,6 +21,24 @@ export default function DashboardPage() {
       dispatch(fetchCurrentUser())
     }
   }, [isAuthenticated, user, dispatch, router])
+
+  useEffect(() => {
+    const loadEnrollments = async () => {
+      try {
+        setLoadingEnrollments(true)
+        const data = await studentApi.getMyEnrollments()
+        setEnrollments(data)
+      } catch {
+        setEnrollments({ courses: [], exams: [] })
+      } finally {
+        setLoadingEnrollments(false)
+      }
+    }
+
+    if (isAuthenticated) {
+      loadEnrollments()
+    }
+  }, [isAuthenticated])
 
   if (isLoading) {
     return (
@@ -32,8 +53,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
@@ -165,6 +184,45 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-600">Manage your account</p>
             </div>
           </div>
+        </div>
+
+        {/* My Enrollments */}
+        <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm mb-8">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">My Enrollments</h3>
+          {loadingEnrollments ? (
+            <p className="text-gray-500">Loading enrollments...</p>
+          ) : enrollments.courses.length === 0 && enrollments.exams.length === 0 ? (
+            <p className="text-gray-500">No enrolled courses or exams yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">Enrolled Courses ({enrollments.courses.length})</h4>
+                <div className="space-y-3">
+                  {enrollments.courses.slice(0, 5).map((item) => (
+                    <Link
+                      key={item.enrollment_id}
+                      href={`/student/courses/${item.course.id}`}
+                      className="block p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    >
+                      <p className="font-medium text-gray-900">{item.course.title}</p>
+                      <p className="text-sm text-gray-600">{item.course.subject} • Grade {item.course.grade}</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">Enrolled Exams ({enrollments.exams.length})</h4>
+                <div className="space-y-3">
+                  {enrollments.exams.slice(0, 5).map((item) => (
+                    <div key={item.enrollment_id} className="p-3 border border-gray-200 rounded-lg">
+                      <p className="font-medium text-gray-900">{item.exam.title}</p>
+                      <p className="text-sm text-gray-600">{item.exam.total_questions} questions • {item.exam.duration_minutes} min</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Recent Activity */}

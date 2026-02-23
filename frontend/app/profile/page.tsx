@@ -1,17 +1,18 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import Navbar from '@/components/Navbar'
 import { getInitials } from '@/lib/utils/initials'
+import * as studentApi from '@/lib/api/student'
 
 export default function ProfilePage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
+  const [enrollments, setEnrollments] = useState<studentApi.MyEnrollmentsResponse>({ courses: [], exams: [] })
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -20,6 +21,21 @@ export default function ProfilePage() {
       dispatch(fetchCurrentUser())
     }
   }, [isAuthenticated, user, dispatch, router])
+
+  useEffect(() => {
+    const loadEnrollments = async () => {
+      try {
+        const data = await studentApi.getMyEnrollments()
+        setEnrollments(data)
+      } catch {
+        setEnrollments({ courses: [], exams: [] })
+      }
+    }
+
+    if (isAuthenticated) {
+      loadEnrollments()
+    }
+  }, [isAuthenticated])
 
   if (isLoading) {
     return (
@@ -36,8 +52,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="max-w-4xl mx-auto">
@@ -152,6 +166,39 @@ export default function ProfilePage() {
               <button className="px-6 py-2 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors">
                 Edit Profile
               </button>
+            </div>
+          </div>
+
+          {/* Enrollments */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">My Enrollments</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm text-gray-500 mb-2">Courses</p>
+                <p className="text-2xl font-bold text-gray-900 mb-3">{enrollments.courses.length}</p>
+                <div className="space-y-2">
+                  {enrollments.courses.slice(0, 3).map((item) => (
+                    <Link
+                      key={item.enrollment_id}
+                      href={`/student/courses/${item.course.id}`}
+                      className="block text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      {item.course.title}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 mb-2">Exams</p>
+                <p className="text-2xl font-bold text-gray-900 mb-3">{enrollments.exams.length}</p>
+                <div className="space-y-2">
+                  {enrollments.exams.slice(0, 3).map((item) => (
+                    <p key={item.enrollment_id} className="text-sm text-gray-700">
+                      {item.exam.title}
+                    </p>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

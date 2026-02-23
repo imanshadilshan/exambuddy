@@ -1,10 +1,10 @@
 """
 Student API Routes - Course enrollment and exam access
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
 
@@ -19,14 +19,34 @@ from app.schemas.exam import ExamResponse
 from app.schemas.enrollment import CourseEnrollmentResponse, ExamEnrollmentResponse
 from app.schemas.payment import PaymentResponse
 from app.dependencies import get_current_user
+from app.core.security import verify_token
 
 router = APIRouter(prefix="/student", tags=["Student"])
 
 
+def get_optional_user(request: Request, db: Session) -> Optional[User]:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    payload = verify_token(token, token_type="access")
+    if not payload:
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+
+    return db.query(User).filter(User.id == user_id).first()
+
+
 @router.get("/courses", response_model=List[CourseResponse])
 def get_available_courses(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get all active courses available for enrollment"""
     courses = db.query(Course).filter(Course.is_active == True).all()
@@ -36,8 +56,7 @@ def get_available_courses(
 @router.get("/courses/{course_id}", response_model=CourseResponse)
 def get_course_overview(
     course_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get course details with enrollment status"""
     course = db.query(Course).filter(Course.id == course_id, Course.is_active == True).first()
@@ -52,33 +71,37 @@ def get_course_overview(
 @router.get("/courses/{course_id}/exams")
 def get_course_exams(
     course_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    db: Session = Depends(get_db)
 ):
     """Get all exams for a course with enrollment status"""
-    # Check if user has full course access
-    course_enrollment = db.query(CourseEnrollment).filter(
-        CourseEnrollment.user_id == current_user.id,
-        CourseEnrollment.course_id == course_id,
-        CourseEnrollment.status == EnrollmentStatus.ACTIVE
-    ).first()
-    
-    has_course_access = course_enrollment is not None
+    current_user = get_optional_user(request, db)
 
-    # Get all exams
+    # Check if user has full course access
+    has_course_access = False
+    if current_user:
+        course_enrollment = db.query(CourseEnrollment).filter(
+            CourseEnrollment.user_id == current_user.id,
+            CourseEnrollment.course_id == course_id,
+            CourseEnrollment.status == EnrollmentStatus.ACTIVE
+        ).first()
+        has_course_access = course_enrollment is not None
+
+    # Get all exams for the course
     exams = db.query(Exam).filter(
-        Exam.course_id == course_id,
-        Exam.is_published == True
+        Exam.course_id == course_id
     ).all()
 
     result = []
     for exam in exams:
         # Check individual exam enrollment
-        exam_enrollment = db.query(ExamEnrollment).filter(
-            ExamEnrollment.user_id == current_user.id,
-            ExamEnrollment.exam_id == exam.id,
-            ExamEnrollment.status == EnrollmentStatus.ACTIVE
-        ).first()
+        exam_enrollment = None
+        if current_user:
+            exam_enrollment = db.query(ExamEnrollment).filter(
+                ExamEnrollment.user_id == current_user.id,
+                ExamEnrollment.exam_id == exam.id,
+                ExamEnrollment.status == EnrollmentStatus.ACTIVE
+            ).first()
 
         result.append({
             "id": str(exam.id),

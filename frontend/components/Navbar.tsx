@@ -1,11 +1,23 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useAppSelector } from '@/lib/redux/hooks'
 import ProfileDropdown from './ProfileDropdown'
+import AdminNavbar from './AdminNavbar'
 
 export default function Navbar() {
+  const pathname = usePathname()
   const { isAuthenticated } = useAppSelector((state) => state.auth)
+
+  const hiddenRoutes = ['/login', '/register']
+  if (hiddenRoutes.includes(pathname)) {
+    return null
+  }
+
+  if (pathname.startsWith('/admin')) {
+    return <AdminNavbar />
+  }
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
@@ -18,6 +30,12 @@ export default function Navbar() {
             <span className="text-xl font-bold text-gray-900">ExamBuddy</span>
           </Link>
           <div className="flex items-center gap-4">
+            <Link
+              href="/student/courses"
+              className="px-3 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+            >
+              Courses
+            </Link>
             {isAuthenticated ? (
               <ProfileDropdown />
             ) : (

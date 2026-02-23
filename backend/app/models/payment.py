@@ -31,6 +31,10 @@ class PaymentType(enum.Enum):
     EXAM = "exam"
 
 
+def enum_values(enum_cls):
+    return [member.value for member in enum_cls]
+
+
 class Payment(Base):
     """Payment transaction record"""
     __tablename__ = "payments"
@@ -39,14 +43,24 @@ class Payment(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # What was purchased
-    payment_type = Column(SQLEnum(PaymentType), nullable=False)
+    payment_type = Column(
+        SQLEnum(PaymentType, values_callable=enum_values, name="payment_type"),
+        nullable=False,
+    )
     course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
     exam_id = Column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="SET NULL"), nullable=True)
     
     # Payment details
     amount = Column(Integer, nullable=False)  # Amount in LKR
-    payment_method = Column(SQLEnum(PaymentMethod), nullable=False)
-    status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
+    payment_method = Column(
+        SQLEnum(PaymentMethod, values_callable=enum_values, name="payment_method"),
+        nullable=False,
+    )
+    status = Column(
+        SQLEnum(PaymentStatus, values_callable=enum_values, name="payment_status"),
+        default=PaymentStatus.PENDING,
+        nullable=False,
+    )
     
     # PayHere specific
     payhere_order_id = Column(String, nullable=True, index=True)
@@ -87,7 +101,11 @@ class BankSlip(Base):
     reference_number = Column(String, nullable=True)
     
     # Verification
-    status = Column(SQLEnum(BankSlipStatus), default=BankSlipStatus.PENDING, nullable=False)
+    status = Column(
+        SQLEnum(BankSlipStatus, values_callable=enum_values, name="bank_slip_status"),
+        default=BankSlipStatus.PENDING,
+        nullable=False,
+    )
     verified_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     verified_at = Column(DateTime(timezone=True), nullable=True)
     rejection_reason = Column(Text, nullable=True)
