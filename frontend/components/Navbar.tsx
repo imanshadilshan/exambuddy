@@ -42,6 +42,12 @@ export default function Navbar() {
             >
               Rankings
             </Link>
+            <Link
+              href="/info"
+              className="px-3 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+            >
+              About
+            </Link>
             {isAuthenticated && (
               <Link
                 href="/student/my-courses"

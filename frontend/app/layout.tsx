@@ -5,6 +5,7 @@ import { Providers } from '@/lib/redux/provider'
 import NotificationManager from '@/components/NotificationManager'
 import AuthInitializer from '@/components/AuthInitializer'
 import Navbar from '@/components/Navbar'
+import Footer from '@/components/Footer'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -25,6 +26,7 @@ export default function RootLayout({
           <AuthInitializer />
           <Navbar />
           {children}
+          <Footer />
           <NotificationManager />
         </Providers>
       </body>

@@ -224,3 +224,26 @@ export const getRankingsLeaderboard = async (subject: string, limit = 50): Promi
   })
   return response.data
 }
+
+export interface TopCourse {
+  id: string
+  title: string
+  subject: string
+  grade: number
+  image_url: string | null
+  price: number
+  enrollment_count: number
+}
+
+export interface PlatformStats {
+  total_students: number
+  total_courses: number
+  total_exams: number
+  total_attempts: number
+  top_courses: TopCourse[]
+}
+
+export const getPlatformStats = async (): Promise<PlatformStats> => {
+  const response = await apiClient.get('/api/v1/student/stats')
+  return response.data
+}

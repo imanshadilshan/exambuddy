@@ -49,6 +49,49 @@ def get_optional_user(request: Request, db: Session) -> Optional[User]:
     return db.query(User).filter(User.id == user_id).first()
 
 
+@router.get("/stats")
+def get_platform_stats(db: Session = Depends(get_db)):
+    """Public platform-wide statistics for the homepage."""
+    total_students = db.query(func.count(Student.id)).scalar() or 0
+    total_courses = db.query(func.count(Course.id)).filter(Course.is_active == True).scalar() or 0
+    total_exams = db.query(func.count(Exam.id)).filter(Exam.is_published == True).scalar() or 0
+    total_attempts = (
+        db.query(func.count(ExamAttempt.id))
+        .filter(ExamAttempt.status == ExamAttemptStatus.SUBMITTED)
+        .scalar() or 0
+    )
+
+    # Top 4 courses ordered by enrollment count
+    top_courses_q = (
+        db.query(Course, func.count(CourseEnrollment.id).label("enrollment_count"))
+        .outerjoin(CourseEnrollment, CourseEnrollment.course_id == Course.id)
+        .filter(Course.is_active == True)
+        .group_by(Course.id)
+        .order_by(func.count(CourseEnrollment.id).desc())
+        .limit(4)
+        .all()
+    )
+
+    return {
+        "total_students": total_students,
+        "total_courses": total_courses,
+        "total_exams": total_exams,
+        "total_attempts": total_attempts,
+        "top_courses": [
+            {
+                "id": str(c.id),
+                "title": c.title,
+                "subject": c.subject,
+                "grade": c.grade,
+                "image_url": c.image_url,
+                "price": c.price,
+                "enrollment_count": enrollment_count,
+            }
+            for c, enrollment_count in top_courses_q
+        ],
+    }
+
+
 @router.get("/courses", response_model=List[CourseResponse])
 def get_available_courses(
     db: Session = Depends(get_db)
