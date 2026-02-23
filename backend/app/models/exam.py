@@ -21,6 +21,7 @@ class Exam(Base):
     description = Column(Text, nullable=True)
     duration_minutes = Column(Integer, nullable=False, default=60)
     total_questions = Column(Integer, nullable=False, default=0)
+    price = Column(Integer, nullable=False, default=0)  # 0 means free
     is_published = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

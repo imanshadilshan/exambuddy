@@ -10,6 +10,7 @@ interface Exam {
   description?: string | null
   duration_minutes: number
   total_questions: number
+  price: number
 }
 
 interface ExamsState {

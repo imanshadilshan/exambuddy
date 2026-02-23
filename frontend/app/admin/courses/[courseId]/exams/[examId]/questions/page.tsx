@@ -8,14 +8,14 @@ import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 import { fetchCourses } from '@/lib/redux/slices/coursesSlice'
 import { fetchExams } from '@/lib/redux/slices/examsSlice'
 import { 
-  getQuestions, 
-  createQuestion, 
-  updateQuestion, 
-  deleteQuestion, 
+  fetchQuestions,
+  createQuestion,
+  updateQuestion,
+  deleteQuestion,
   importQuestionsCSV,
-  uploadImage,
-  deleteImage 
-} from '@/lib/api/admin'
+  clearError as clearQuestionsError
+} from '@/lib/redux/slices/questionsSlice'
+import { uploadImage, deleteImage } from '@/lib/api/admin'
 
 type Course = {
   id: string
@@ -59,18 +59,19 @@ export default function QuestionsPage() {
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
   const { courses } = useAppSelector((state) => state.courses)
   const { exams } = useAppSelector((state) => state.exams)
+  const { questions, isLoading: loadingData, error: storeError } = useAppSelector((state) => state.questions)
 
   const [course, setCourse] = useState<Course | null>(null)
   const [exam, setExam] = useState<Exam | null>(null)
-  const [questions, setQuestions] = useState<Question[]>([])
-  const [error, setError] = useState('')
+  const [localError, setLocalError] = useState('')
   const [success, setSuccess] = useState('')
-  const [loadingData, setLoadingData] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  
+  const error = storeError || localError
   
   // Helper function to get number of options based on grade
   const getNumOptions = () => {
@@ -100,6 +101,8 @@ export default function QuestionsPage() {
   const [questionImageFile, setQuestionImageFile] = useState<File | null>(null)
   const [optionImageFiles, setOptionImageFiles] = useState<{ [key: number]: File | null }>({})
   const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [removeQuestionImage, setRemoveQuestionImage] = useState(false)
+  const [removeOptionImages, setRemoveOptionImages] = useState<{ [key: number]: boolean }>({})
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -126,7 +129,8 @@ export default function QuestionsPage() {
       dispatch(fetchExams(courseId))
     }
 
-    loadQuestions()
+    // Load questions for this exam
+    dispatch(fetchQuestions(examId))
   }, [isAuthenticated, user, dispatch, router, courseId, examId])
 
   useEffect(() => {
@@ -137,19 +141,6 @@ export default function QuestionsPage() {
     if (foundCourse) setCourse(foundCourse)
     if (foundExam) setExam(foundExam)
   }, [courses, exams, courseId, examId])
-
-  const loadQuestions = async () => {
-    try {
-      setLoadingData(true)
-      setError('')
-      const data = await getQuestions(examId)
-      setQuestions(data)
-    } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to load questions')
-    } finally {
-      setLoadingData(false)
-    }
-  }
 
   const getErrorMessage = (err: any): string => {
     if (err?.response?.data?.detail && typeof err.response.data.detail === 'object') {
@@ -188,14 +179,14 @@ export default function QuestionsPage() {
   const handleCreateQuestion = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      setError('')
+      setLocalError('')
       setSuccess('')
       setIsCreating(true)
 
       // Validate question text
       const questionText = questionForm.question_text.trim()
       if (!questionText) {
-        setError('Please enter question text')
+        setLocalError('Please enter question text')
         setIsCreating(false)
         return
       }
@@ -203,7 +194,7 @@ export default function QuestionsPage() {
       // Validate options
       const validOptions = questionForm.options.filter(opt => opt.option_text.trim())
       if (validOptions.length < 2) {
-        setError('Please provide at least 2 options')
+        setLocalError('Please provide at least 2 options')
         setIsCreating(false)
         return
       }
@@ -211,7 +202,7 @@ export default function QuestionsPage() {
       // Validate correct answer
       const correctOptions = questionForm.options.filter(opt => opt.is_correct)
       if (correctOptions.length !== 1) {
-        setError('Please select exactly one correct answer')
+        setLocalError('Please select exactly one correct answer')
         setIsCreating(false)
         return
       }
@@ -226,7 +217,7 @@ export default function QuestionsPage() {
           questionImageUrl = result.image_url
           questionImagePublicId = result.image_public_id
         } catch (err: any) {
-          setError('Failed to upload question image')
+          setLocalError('Failed to upload question image')
           setIsCreating(false)
           return
         }
@@ -269,12 +260,11 @@ export default function QuestionsPage() {
         }))
       }
 
-      await createQuestion(payload)
-      await loadQuestions()
+      await dispatch(createQuestion(payload)).unwrap()
       setSuccess('Question created successfully')
       closeCreateModal()
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to create question')
+      setLocalError(getErrorMessage(err) || 'Failed to create question')
     } finally {
       setIsCreating(false)
     }
@@ -285,37 +275,45 @@ export default function QuestionsPage() {
     if (!editingQuestionId) return
 
     try {
-      setError('')
+      setLocalError('')
       setSuccess('')
       setIsCreating(true)
 
       // Similar validation as create
       const questionText = questionForm.question_text.trim()
       if (!questionText) {
-        setError('Please enter question text')
+        setLocalError('Please enter question text')
         setIsCreating(false)
         return
       }
 
       const validOptions = questionForm.options.filter(opt => opt.option_text.trim())
       if (validOptions.length < 2) {
-        setError('Please provide at least 2 options')
+        setLocalError('Please provide at least 2 options')
         setIsCreating(false)
         return
       }
 
       const correctOptions = questionForm.options.filter(opt => opt.is_correct)
       if (correctOptions.length !== 1) {
-        setError('Please select exactly one correct answer')
+        setLocalError('Please select exactly one correct answer')
         setIsCreating(false)
         return
       }
 
       // Upload question image if new file provided
-      let questionImageUrl = questionForm.question_image_url
-      let questionImagePublicId = questionForm.question_image_public_id
+      let questionImageUrl: string | null = questionForm.question_image_url
+      let questionImagePublicId: string | null = questionForm.question_image_public_id
 
-      if (questionImageFile) {
+      // Handle question image removal
+      if (removeQuestionImage) {
+        // Delete from Cloudinary
+        if (questionForm.question_image_public_id) {
+          await deleteImageFromCloudinary(questionForm.question_image_public_id)
+        }
+        questionImageUrl = null
+        questionImagePublicId = null
+      } else if (questionImageFile) {
         try {
           const result = await uploadQuestionImage(questionImageFile)
           questionImageUrl = result.image_url
@@ -326,7 +324,7 @@ export default function QuestionsPage() {
             await deleteImageFromCloudinary(questionForm.question_image_public_id)
           }
         } catch (err: any) {
-          setError('Failed to upload question image')
+          setLocalError('Failed to upload question image')
           setIsCreating(false)
           return
         }
@@ -335,7 +333,18 @@ export default function QuestionsPage() {
       // Upload option images
       const optionsWithImages = await Promise.all(
         questionForm.options.map(async (opt, idx) => {
-          if (optionImageFiles[idx]) {
+          // Handle option image removal
+          if (removeOptionImages[idx]) {
+            // Delete from Cloudinary
+            if (opt.option_image_public_id) {
+              await deleteImageFromCloudinary(opt.option_image_public_id)
+            }
+            return {
+              ...opt,
+              option_image_url: null,
+              option_image_public_id: null,
+            }
+          } else if (optionImageFiles[idx]) {
             try {
               const result = await uploadQuestionImage(optionImageFiles[idx]!)
               
@@ -372,12 +381,11 @@ export default function QuestionsPage() {
         }))
       }
 
-      await updateQuestion(editingQuestionId, payload)
-      await loadQuestions()
+      await dispatch(updateQuestion({ id: editingQuestionId, data: payload })).unwrap()
       setSuccess('Question updated successfully')
       closeEditModal()
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to update question')
+      setLocalError(getErrorMessage(err) || 'Failed to update question')
     } finally {
       setIsCreating(false)
     }
@@ -388,7 +396,7 @@ export default function QuestionsPage() {
     if (!confirmed) return
 
     try {
-      setError('')
+      setLocalError('')
       setSuccess('')
       
       // Delete images
@@ -402,45 +410,43 @@ export default function QuestionsPage() {
         }
       })
       
-      await deleteQuestion(question.id)
-      await loadQuestions()
+      await dispatch(deleteQuestion(question.id)).unwrap()
       setSuccess('Question deleted successfully')
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to delete question')
+      setLocalError(getErrorMessage(err) || 'Failed to delete question')
     }
   }
 
   const handleImportCSV = async (e: FormEvent) => {
     e.preventDefault()
     if (!csvFile) {
-      setError('Please select a CSV file')
+      setLocalError('Please select a CSV file')
       return
     }
 
     try {
-      setError('')
+      setLocalError('')
       setSuccess('')
       setIsCreating(true)
 
-      const result = await importQuestionsCSV(examId, csvFile)
-      await loadQuestions()
+      const result = await dispatch(importQuestionsCSV({ examId, file: csvFile })).unwrap()
       
-      let message = result.message
-      if (result.errors && result.errors.length > 0) {
-        message += `\n\nErrors:\n${result.errors.join('\n')}`
+      let message = 'Questions imported successfully'
+      if (result && Array.isArray(result)) {
+        message = `${result.length} question(s) imported successfully`
       }
       
       setSuccess(message)
       closeImportModal()
     } catch (err: any) {
-      setError(getErrorMessage(err) || 'Failed to import questions')
+      setLocalError(getErrorMessage(err) || 'Failed to import questions')
     } finally {
       setIsCreating(false)
     }
   }
 
   const openCreateModal = () => {
-    setError('')
+    setLocalError('')
     setSuccess('')
     setQuestionForm({
       question_text: '',
@@ -456,13 +462,13 @@ export default function QuestionsPage() {
 
   const closeCreateModal = () => {
     setShowCreateModal(false)
-    setError('')
+    setLocalError('')
     setQuestionImageFile(null)
     setOptionImageFiles({})
   }
 
   const openEditModal = (question: Question) => {
-    setError('')
+    setLocalError('')
     setSuccess('')
     const numOptions = getNumOptions()
     const currentOptions = question.options.length > 0 
@@ -495,20 +501,24 @@ export default function QuestionsPage() {
     })
     setQuestionImageFile(null)
     setOptionImageFiles({})
+    setRemoveQuestionImage(false)
+    setRemoveOptionImages({})
     setEditingQuestionId(question.id)
     setShowEditModal(true)
   }
 
   const closeEditModal = () => {
     setShowEditModal(false)
-    setError('')
+    setLocalError('')
     setQuestionImageFile(null)
     setOptionImageFiles({})
+    setRemoveQuestionImage(false)
+    setRemoveOptionImages({})
     setEditingQuestionId(null)
   }
 
   const openImportModal = () => {
-    setError('')
+    setLocalError('')
     setSuccess('')
     setCsvFile(null)
     setShowImportModal(true)
@@ -516,7 +526,7 @@ export default function QuestionsPage() {
 
   const closeImportModal = () => {
     setShowImportModal(false)
-    setError('')
+    setLocalError('')
     setCsvFile(null)
   }
 
@@ -933,15 +943,38 @@ export default function QuestionsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Question Image
                 </label>
-                {questionForm.question_image_url && !questionImageFile && (
+                {questionForm.question_image_url && !questionImageFile && !removeQuestionImage && (
                   <div className="mb-3 bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-600 mb-2">Current Image:</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-gray-600">Current Image:</p>
+                      <button
+                        type="button"
+                        onClick={() => setRemoveQuestionImage(true)}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Remove Image
+                      </button>
+                    </div>
                     <img 
                       src={questionForm.question_image_url} 
                       alt="Current" 
                       className="w-full max-w-sm mx-auto rounded-lg object-contain" 
                       style={{ maxHeight: '200px' }}
                     />
+                  </div>
+                )}
+                {removeQuestionImage && (
+                  <div className="mb-3 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-red-700">Image will be removed when you save</p>
+                      <button
+                        type="button"
+                        onClick={() => setRemoveQuestionImage(false)}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Undo
+                      </button>
+                    </div>
                   </div>
                 )}
                 {questionImageFile && (
@@ -955,13 +988,17 @@ export default function QuestionsPage() {
                     />
                   </div>
                 )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setQuestionImageFile(e.target.files?.[0] || null)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">Upload a new image to replace the current one</p>
+                {!removeQuestionImage && (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setQuestionImageFile(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Upload a new image to replace the current one</p>
+                  </>
+                )}
               </div>
 
               <div>
@@ -1020,15 +1057,42 @@ export default function QuestionsPage() {
                             <label className="block text-xs font-semibold text-gray-700 mb-2">
                               Option Image (Optional)
                             </label>
-                            {option.option_image_url && !optionImageFiles[idx] && (
+                            {option.option_image_url && !optionImageFiles[idx] && !removeOptionImages[idx] && (
                               <div className="mb-2 bg-white rounded-lg p-2 border border-gray-200">
-                                <p className="text-xs text-gray-600 mb-1">Current Image:</p>
+                                <div className="flex items-center justify-between mb-1">
+                                  <p className="text-xs text-gray-600">Current Image:</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRemoveOptionImages({ ...removeOptionImages, [idx]: true })}
+                                    className="text-xs text-red-600 hover:text-red-800 font-medium"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                                 <img 
                                   src={option.option_image_url} 
                                   alt={`Option ${String.fromCharCode(65 + idx)}`} 
                                   className="w-full max-w-xs rounded object-contain" 
                                   style={{ maxHeight: '100px' }}
                                 />
+                              </div>
+                            )}
+                            {removeOptionImages[idx] && (
+                              <div className="mb-2 bg-red-50 border border-red-200 rounded-lg p-2">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs text-red-700">Image will be removed</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = { ...removeOptionImages }
+                                      delete updated[idx]
+                                      setRemoveOptionImages(updated)
+                                    }}
+                                    className="text-xs text-red-600 hover:text-red-800 font-medium"
+                                  >
+                                    Undo
+                                  </button>
+                                </div>
                               </div>
                             )}
                             {optionImageFiles[idx] && (
@@ -1042,15 +1106,17 @@ export default function QuestionsPage() {
                                 />
                               </div>
                             )}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0] || null
-                                setOptionImageFiles({ ...optionImageFiles, [idx]: file })
-                              }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
-                            />
+                            {!removeOptionImages[idx] && (
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null
+                                  setOptionImageFiles({ ...optionImageFiles, [idx]: file })
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                              />
+                            )}
                           </div>
                         </div>
                       </div>

@@ -15,6 +15,7 @@ class ExamCreate(BaseModel):
     description: Optional[str] = None
     duration_minutes: int = Field(..., ge=1, le=480)
     total_questions: int = Field(..., ge=0)
+    price: int = Field(default=0, ge=0)  # 0 means free
 
 
 class ExamUpdate(BaseModel):
@@ -25,6 +26,7 @@ class ExamUpdate(BaseModel):
     description: Optional[str] = None
     duration_minutes: Optional[int] = Field(default=None, ge=1, le=480)
     total_questions: Optional[int] = Field(default=None, ge=0)
+    price: Optional[int] = Field(default=None, ge=0)  # 0 means free
     is_published: Optional[bool] = None
 
 
@@ -37,6 +39,7 @@ class ExamResponse(BaseModel):
     description: Optional[str]
     duration_minutes: int
     total_questions: int
+    price: int
     is_published: bool
     created_at: datetime
     updated_at: Optional[datetime]

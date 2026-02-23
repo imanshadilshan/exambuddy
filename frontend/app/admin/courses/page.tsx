@@ -28,6 +28,7 @@ export default function AdminCoursesPage() {
 
   const [localError, setLocalError] = useState('')
   const [courseImageFile, setCourseImageFile] = useState<File | null>(null)
+  const [removeCourseImage, setRemoveCourseImage] = useState(false)
   const [isCreatingCourse, setIsCreatingCourse] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -205,6 +206,7 @@ export default function AdminCoursesPage() {
       description: course.description || '',
     })
     setCourseImageFile(null)
+    setRemoveCourseImage(false)
     setEditingCourseId(course.id)
     setShowEditModal(true)
   }
@@ -213,6 +215,7 @@ export default function AdminCoursesPage() {
     setShowEditModal(false)
     setLocalError('')
     setCourseImageFile(null)
+    setRemoveCourseImage(false)
     setEditingCourseId(null)
   }
 
@@ -261,14 +264,22 @@ export default function AdminCoursesPage() {
       let imagePublicId: string | null = null
       const oldPublicId = courseForm.image_public_id
 
+      // Handle image removal
+      if (removeCourseImage) {
+        // Delete from Cloudinary
+        if (oldPublicId) {
+          await deleteImageFromCloudinary(oldPublicId)
+        }
+        imageUrl = null
+        imagePublicId = null
+      }
       // If editing and no new image selected, keep existing image
-      if (!courseImageFile && courseForm.image_url) {
+      else if (!courseImageFile && courseForm.image_url) {
         imageUrl = courseForm.image_url
         imagePublicId = courseForm.image_public_id
       }
-
       // Upload new image if file was selected
-      if (courseImageFile) {
+      else if (courseImageFile) {
         try {
           const uploadResult = await uploadImageToCloudinary(courseImageFile)
           imageUrl = uploadResult.image_url || null
@@ -569,20 +580,49 @@ export default function AdminCoursesPage() {
               />
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Course Image</label>
-                {courseForm.image_url && !courseImageFile && (
-                  <div className="flex items-center gap-3 mb-3">
-                    <img src={courseForm.image_url} alt="Current course" className="w-24 h-16 rounded object-cover border border-gray-200" />
-                    <span className="text-xs text-gray-600">Current image</span>
+                {courseForm.image_url && !courseImageFile && !removeCourseImage && (
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <img src={courseForm.image_url} alt="Current course" className="w-24 h-16 rounded object-cover border border-gray-200" />
+                        <span className="text-xs text-gray-600">Current image</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRemoveCourseImage(true)}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Remove Image
+                      </button>
+                    </div>
                   </div>
                 )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  onChange={(e) => setCourseImageFile(e.target.files?.[0] || null)}
-                />
-                {courseImageFile && (
-                  <p className="text-xs text-gray-600">Selected: {courseImageFile.name} (will replace current image)</p>
+                {removeCourseImage && (
+                  <div className="mb-3 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-red-700">Image will be removed when you save</p>
+                      <button
+                        type="button"
+                        onClick={() => setRemoveCourseImage(false)}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!removeCourseImage && (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      onChange={(e) => setCourseImageFile(e.target.files?.[0] || null)}
+                    />
+                    {courseImageFile && (
+                      <p className="text-xs text-gray-600">Selected: {courseImageFile.name} (will replace current image)</p>
+                    )}
+                  </>
                 )}
               </div>
               <input

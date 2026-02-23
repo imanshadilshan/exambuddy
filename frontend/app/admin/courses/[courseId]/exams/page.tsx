@@ -29,6 +29,7 @@ type Exam = {
   description?: string | null
   duration_minutes: number
   total_questions: number
+  price: number
 }
 
 export default function CourseExamsPage() {
@@ -42,6 +43,7 @@ export default function CourseExamsPage() {
 
   const [localError, setLocalError] = useState('')
   const [examImageFile, setExamImageFile] = useState<File | null>(null)
+  const [removeExamImage, setRemoveExamImage] = useState(false)
   const [isCreatingExam, setIsCreatingExam] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -55,6 +57,7 @@ export default function CourseExamsPage() {
     duration_hours: '',
     duration_minutes: '',
     total_questions: '',
+    price: '0',
   })
 
   const error = storeError || localError
@@ -180,6 +183,14 @@ export default function CourseExamsPage() {
         return
       }
 
+      // Validate price
+      const price = Number(examForm.price) || 0
+      if (isNaN(price) || price < 0) {
+        setLocalError('Please enter a valid price (0 for free)')
+        setIsCreatingExam(false)
+        return
+      }
+
       // Safely prepare description
       const description = examForm.description ? examForm.description.trim() : null
       const finalDescription = description && description.length > 0 ? description : null
@@ -215,6 +226,7 @@ export default function CourseExamsPage() {
         description: finalDescription,
         duration_minutes: totalDurationMinutes,
         total_questions: Math.floor(totalQuestions),
+        price: Math.floor(price),
       })).unwrap()
 
       setExamForm({
@@ -225,6 +237,7 @@ export default function CourseExamsPage() {
         duration_hours: '',
         duration_minutes: '',
         total_questions: '',
+        price: '0',
       })
       setExamImageFile(null)
       setShowCreateModal(false)
@@ -246,6 +259,7 @@ export default function CourseExamsPage() {
       duration_hours: '',
       duration_minutes: '',
       total_questions: '',
+      price: '0',
     })
     setExamImageFile(null)
     setShowCreateModal(true)
@@ -269,8 +283,10 @@ export default function CourseExamsPage() {
       duration_hours: hours > 0 ? String(hours) : '',
       duration_minutes: minutes > 0 ? String(minutes) : '',
       total_questions: String(exam.total_questions),
+      price: String(exam.price || 0),
     })
     setExamImageFile(null)
+    setRemoveExamImage(false)
     setEditingExamId(exam.id)
     setShowEditModal(true)
   }
@@ -279,6 +295,7 @@ export default function CourseExamsPage() {
     setShowEditModal(false)
     setLocalError('')
     setExamImageFile(null)
+    setRemoveExamImage(false)
     setEditingExamId(null)
   }
 
@@ -334,6 +351,14 @@ export default function CourseExamsPage() {
         return
       }
 
+      // Validate price
+      const price = Number(examForm.price) || 0
+      if (isNaN(price) || price < 0) {
+        setLocalError('Please enter a valid price (0 for free)')
+        setIsCreatingExam(false)
+        return
+      }
+
       // Safely prepare description
       const description = examForm.description ? examForm.description.trim() : null
       const finalDescription = description && description.length > 0 ? description : null
@@ -342,14 +367,22 @@ export default function CourseExamsPage() {
       let imagePublicId: string | null = null
       const oldPublicId = examForm.image_public_id
 
+      // Handle image removal
+      if (removeExamImage) {
+        // Delete from Cloudinary
+        if (oldPublicId) {
+          await deleteImageFromCloudinary(oldPublicId)
+        }
+        imageUrl = null
+        imagePublicId = null
+      }
       // If editing and no new image selected, keep existing image
-      if (!examImageFile && examForm.image_url) {
+      else if (!examImageFile && examForm.image_url) {
         imageUrl = examForm.image_url
         imagePublicId = examForm.image_public_id
       }
-
       // Upload new image if file was selected
-      if (examImageFile) {
+      else if (examImageFile) {
         try {
           const uploadResult = await uploadImageToCloudinary(examImageFile)
           imageUrl = uploadResult.image_url || null
@@ -374,6 +407,7 @@ export default function CourseExamsPage() {
           description: finalDescription,
           duration_minutes: totalDurationMinutes,
           total_questions: Math.floor(totalQuestions),
+          price: Math.floor(price),
         }
       })).unwrap()
 
@@ -469,6 +503,16 @@ export default function CourseExamsPage() {
                     <div className="text-xs text-gray-600 mb-3 space-y-1">
                       <p>Duration: {exam.duration_minutes} minutes</p>
                       <p>Questions: {exam.total_questions}</p>
+                      <p className="flex items-center gap-2">
+                        Price: 
+                        {exam.price === 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                            FREE
+                          </span>
+                        ) : (
+                          <span className="font-medium text-gray-900">LKR {exam.price}</span>
+                        )}
+                      </p>
                     </div>
                     {exam.description && (
                       <p className="text-xs text-gray-600 mb-4 line-clamp-2">{exam.description}</p>
@@ -589,6 +633,19 @@ export default function CourseExamsPage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Price (LKR)</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Enter price (0 for free)"
+                  value={examForm.price}
+                  onChange={(e) => setExamForm((prev) => ({ ...prev, price: e.target.value }))}
+                />
+                <p className="text-xs text-gray-500">Set to 0 to make this exam free</p>
+              </div>
+
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
@@ -645,20 +702,49 @@ export default function CourseExamsPage() {
               />
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Exam Image</label>
-                {examForm.image_url && !examImageFile && (
-                  <div className="flex items-center gap-3 mb-3">
-                    <img src={examForm.image_url} alt="Current exam" className="w-24 h-16 rounded object-cover border border-gray-200" />
-                    <span className="text-xs text-gray-600">Current image</span>
+                {examForm.image_url && !examImageFile && !removeExamImage && (
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <img src={examForm.image_url} alt="Current exam" className="w-24 h-16 rounded object-cover border border-gray-200" />
+                        <span className="text-xs text-gray-600">Current image</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRemoveExamImage(true)}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Remove Image
+                      </button>
+                    </div>
                   </div>
                 )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  onChange={(e) => setExamImageFile(e.target.files?.[0] || null)}
-                />
-                {examImageFile && (
-                  <p className="text-xs text-gray-600">Selected: {examImageFile.name} (will replace current image)</p>
+                {removeExamImage && (
+                  <div className="mb-3 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-red-700">Image will be removed when you save</p>
+                      <button
+                        type="button"
+                        onClick={() => setRemoveExamImage(false)}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!removeExamImage && (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      onChange={(e) => setExamImageFile(e.target.files?.[0] || null)}
+                    />
+                    {examImageFile && (
+                      <p className="text-xs text-gray-600">Selected: {examImageFile.name} (will replace current image)</p>
+                    )}
+                  </>
                 )}
               </div>
               <div className="space-y-2">
@@ -700,6 +786,19 @@ export default function CourseExamsPage() {
                   value={examForm.total_questions}
                   onChange={(e) => setExamForm((prev) => ({ ...prev, total_questions: e.target.value }))}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Price (LKR)</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Enter price (0 for free)"
+                  value={examForm.price}
+                  onChange={(e) => setExamForm((prev) => ({ ...prev, price: e.target.value }))}
+                />
+                <p className="text-xs text-gray-500">Set to 0 to make this exam free</p>
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200">
