@@ -68,6 +68,10 @@ export default function CourseOverviewPage() {
     alert('Course purchase coming soon!')
   }
 
+  const handleStartExam = (examId: string) => {
+    router.push(`/student/exams/${examId}`)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -172,6 +176,7 @@ export default function CourseOverviewPage() {
                   exam={exam}
                   onEnroll={handleEnrollFreeExam}
                   onPurchase={handlePurchaseExam}
+                  onStart={handleStartExam}
                   enrolling={enrolling === exam.id}
                 />
               ))}
@@ -192,6 +197,7 @@ export default function CourseOverviewPage() {
                   exam={exam}
                   onEnroll={handleEnrollFreeExam}
                   onPurchase={handlePurchaseExam}
+                  onStart={handleStartExam}
                   enrolling={enrolling === exam.id}
                 />
               ))}
@@ -213,10 +219,11 @@ interface ExamCardProps {
   exam: studentApi.ExamWithAccess
   onEnroll: (examId: string) => void
   onPurchase: (examId: string) => void
+  onStart: (examId: string) => void
   enrolling: boolean
 }
 
-function ExamCard({ exam, onEnroll, onPurchase, enrolling }: ExamCardProps) {
+function ExamCard({ exam, onEnroll, onPurchase, onStart, enrolling }: ExamCardProps) {
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
       {exam.image_url && (
@@ -255,7 +262,7 @@ function ExamCard({ exam, onEnroll, onPurchase, enrolling }: ExamCardProps) {
             </div>
             <button
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-              onClick={() => alert('Start exam - navigation coming soon!')}
+              onClick={() => onStart(exam.id)}
             >
               Start Exam
             </button>

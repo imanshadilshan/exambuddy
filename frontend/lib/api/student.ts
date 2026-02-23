@@ -65,6 +65,80 @@ export interface MyEnrollmentsResponse {
   exams: EnrolledExamItem[]
 }
 
+export interface ExamQuestionOptionView {
+  id: string
+  option_text: string | null
+  option_image_url: string | null
+  order_number: number
+}
+
+export interface ExamQuestionView {
+  id: string
+  question_text: string
+  question_image_url: string | null
+  explanation: string | null
+  order_number: number
+  options: ExamQuestionOptionView[]
+}
+
+export interface StartExamResponse {
+  attempt_id: string
+  exam_id: string
+  exam_title: string
+  subject: string
+  duration_minutes: number
+  started_at: string
+  ends_at: string
+  questions: ExamQuestionView[]
+}
+
+export interface SubmitExamRequest {
+  answers: Array<{
+    question_id: string
+    selected_option_id: string | null
+  }>
+}
+
+export interface SubmitExamResponse {
+  attempt_id: string
+  marks_obtained: number
+  total_questions: number
+  time_taken_seconds: number
+  review: Array<{
+    question_id: string
+    question_text: string
+    explanation: string | null
+    selected_option_id: string | null
+    correct_option_id: string
+    is_correct: boolean
+  }>
+  ranking: {
+    subject: string
+    overall_rank: number | null
+    district_rank: number | null
+  }
+}
+
+export interface SubjectRankResponse {
+  subject: string
+  overall_rank: number | null
+  district_rank: number | null
+}
+
+export interface MyAttemptItem {
+  attempt_id: string
+  exam_id: string
+  exam_title: string
+  subject: string
+  marks_obtained: number | null
+  total_questions: number | null
+  time_taken_seconds: number | null
+  status: string
+  submitted_at: string | null
+  overall_rank: number | null
+  district_rank: number | null
+}
+
 // Get all available courses
 export const getAvailableCourses = async (): Promise<Course[]> => {
   const response = await apiClient.get('/api/v1/student/courses')
@@ -98,5 +172,30 @@ export const getMyEnrollments = async () => {
 // Check exam access
 export const checkExamAccess = async (examId: string) => {
   const response = await apiClient.get(`/api/v1/student/check-access/${examId}`)
+  return response.data
+}
+
+export const startExam = async (examId: string): Promise<StartExamResponse> => {
+  const response = await apiClient.post(`/api/v1/student/exams/${examId}/start`)
+  return response.data
+}
+
+export const submitExamAttempt = async (
+  attemptId: string,
+  payload: SubmitExamRequest
+): Promise<SubmitExamResponse> => {
+  const response = await apiClient.post(`/api/v1/student/exam-attempts/${attemptId}/submit`, payload)
+  return response.data
+}
+
+export const getSubjectRanking = async (subject: string): Promise<SubjectRankResponse> => {
+  const response = await apiClient.get(`/api/v1/student/rankings/subject/${encodeURIComponent(subject)}`)
+  return response.data
+}
+
+export const getMyAttempts = async (limit = 10): Promise<MyAttemptItem[]> => {
+  const response = await apiClient.get('/api/v1/student/my-attempts', {
+    params: { limit },
+  })
   return response.data
 }

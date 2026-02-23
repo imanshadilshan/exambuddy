@@ -23,7 +23,8 @@ if not DATABASE_URL:
 # Migration files to run
 migration_files = [
     "add_price_to_exams.sql",
-    "create_enrollment_payment_tables.sql"
+    "create_enrollment_payment_tables.sql",
+    "create_exam_attempts_tables.sql"
 ]
 
 # Create engine
