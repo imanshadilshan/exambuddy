@@ -238,18 +238,18 @@ export default function StudentExamPage() {
           </div>
         </div>
       )}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8" onCopy={(e) => e.preventDefault()}>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8" onCopy={(e) => e.preventDefault()}>
         {!result ? (
           <>
-            <div className="bg-white border-b border-gray-200 shadow-sm sticky top-16 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <h1 className="text-lg font-bold text-gray-900">{examData.exam_title}</h1>
+            <div className="bg-white border-b border-gray-200 shadow-sm sticky top-16 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-2 sm:py-3 mb-4 sm:mb-6">
+              <div className="flex items-center justify-between gap-2 sm:gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                  <div className="min-w-0">
+                    <h1 className="text-sm sm:text-lg font-bold text-gray-900 truncate">{examData.exam_title}</h1>
                     <p className="text-xs text-gray-600">{examData.subject} • Unanswered: {unansweredCount}</p>
                   </div>
                 </div>
-                <div className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${timeLeft <= 60 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                <div className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap ${timeLeft <= 60 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
                   {formatTime(timeLeft)}
                 </div>
               </div>
@@ -258,10 +258,10 @@ export default function StudentExamPage() {
 
             <div className="space-y-6">
               {examData.questions.map((question, index) => (
-                <div key={question.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                  <div className={question.question_image_url ? "flex gap-6" : ""}>
-                    <div className={question.question_image_url ? "flex-1" : ""}>
-                      <h2 className="text-lg font-semibold text-gray-900 mb-3">
+                <div key={question.id} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">
+                  <div className={question.question_image_url ? "flex flex-col lg:flex-row gap-4 lg:gap-6" : ""}>
+                    <div className={question.question_image_url ? "flex-1 order-2 lg:order-1" : ""}>
+                      <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">
                         {index + 1}. {question.question_text}
                       </h2>
 
@@ -269,23 +269,23 @@ export default function StudentExamPage() {
                         {question.options.map((option) => (
                           <label
                             key={option.id}
-                            className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer ${answers[question.id] === option.id ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                            className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 border rounded-lg cursor-pointer ${answers[question.id] === option.id ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:bg-gray-50'}`}
                           >
                             <input
                               type="radio"
                               name={`question-${question.id}`}
                               checked={answers[question.id] === option.id}
                               onChange={() => handleSelect(question.id, option.id)}
-                              className="mt-1"
+                              className="mt-1 flex-shrink-0"
                             />
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-800">{optionLabel(option.order_number)}.</p>
-                              {option.option_text && <p className="text-gray-700">{option.option_text}</p>}
+                              {option.option_text && <p className="text-sm sm:text-base text-gray-700">{option.option_text}</p>}
                               {option.option_image_url && (
                                 <img
                                   src={option.option_image_url}
                                   alt="Option"
-                                  className="mt-2 max-h-28 rounded border border-gray-200 pointer-events-none"
+                                  className="mt-2 max-h-20 sm:max-h-28 rounded border border-gray-200 pointer-events-none"
                                   draggable="false"
                                   onContextMenu={(e) => e.preventDefault()}
                                 />
@@ -297,11 +297,11 @@ export default function StudentExamPage() {
                     </div>
 
                     {question.question_image_url && (
-                      <div className="w-64 flex-shrink-0">
+                      <div className="w-full lg:w-64 flex-shrink-0 order-1 lg:order-2">
                         <img
                           src={question.question_image_url}
                           alt={`Question ${index + 1}`}
-                          className="w-full h-auto rounded-lg border border-gray-200 sticky top-32 pointer-events-none"
+                          className="w-full h-auto rounded-lg border border-gray-200 lg:sticky lg:top-32 pointer-events-none max-h-64 sm:max-h-80 lg:max-h-none object-contain"
                           draggable="false"
                           onContextMenu={(e) => e.preventDefault()}
                         />
@@ -313,56 +313,56 @@ export default function StudentExamPage() {
             </div>
 
             {/* Submit Button at End */}
-            <div className="mt-8 flex justify-center">
+            <div className="mt-6 sm:mt-8 flex justify-center px-4">
               <button
                 onClick={() => handleSubmit(false)}
                 disabled={submitting}
-                className="px-8 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 font-semibold text-lg shadow-lg"
+                className="w-full sm:w-auto px-6 sm:px-8 py-2.5 sm:py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 font-semibold text-base sm:text-lg shadow-lg"
               >
                 {submitting ? 'Submitting...' : 'Submit Paper'}
               </button>
             </div>
           </>
         ) : (
-          <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h1 className="text-2xl font-bold text-gray-900 mb-3">Exam Result</h1>
-              <p className="text-lg text-gray-800 mb-2">Marks Obtained: <span className="font-bold">{result.marks_obtained} / {result.total_questions}</span></p>
-              <p className="text-gray-700 mb-1">Time Taken: {formatTime(result.time_taken_seconds)}</p>
-              <p className="text-gray-700">Overall Rank ({result.ranking.subject}): <span className="font-semibold">{result.ranking.overall_rank ?? '-'}</span> | District Rank: <span className="font-semibold">{result.ranking.district_rank ?? '-'}</span></p>
+          <div className="space-y-4 sm:space-y-6">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Exam Result</h1>
+              <p className="text-base sm:text-lg text-gray-800 mb-2">Marks Obtained: <span className="font-bold">{result.marks_obtained} / {result.total_questions}</span></p>
+              <p className="text-sm sm:text-base text-gray-700 mb-1">Time Taken: {formatTime(result.time_taken_seconds)}</p>
+              <p className="text-sm sm:text-base text-gray-700">Overall Rank ({result.ranking.subject}): <span className="font-semibold">{result.ranking.overall_rank ?? '-'}</span> | District Rank: <span className="font-semibold">{result.ranking.district_rank ?? '-'}</span></p>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Answer Review</h2>
-              <div className="space-y-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">Answer Review</h2>
+              <div className="space-y-3 sm:space-y-4">
                 {result.review.map((item, idx) => {
                   const selected = getOptionForQuestion(item.question_id, item.selected_option_id)
                   const correct = getOptionForQuestion(item.question_id, item.correct_option_id)
                   return (
-                    <div key={item.question_id} className={`border rounded-lg p-4 ${item.is_correct ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
-                      <p className="font-medium text-gray-900 mb-2">{idx + 1}. {item.question_text}</p>
-                      <p className={`text-sm mb-1 ${item.is_correct ? 'text-green-700' : 'text-red-700'}`}>
+                    <div key={item.question_id} className={`border rounded-lg p-3 sm:p-4 ${item.is_correct ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                      <p className="text-sm sm:text-base font-medium text-gray-900 mb-2">{idx + 1}. {item.question_text}</p>
+                      <p className={`text-xs sm:text-sm mb-1 font-semibold ${item.is_correct ? 'text-green-700' : 'text-red-700'}`}>
                         {item.is_correct ? 'Correct' : 'Incorrect'}
                       </p>
-                      <p className="text-sm text-gray-700">Your Answer: {selected ? `${optionLabel(selected.order_number)}${selected.option_text ? `. ${selected.option_text}` : ''}` : 'Not answered'}</p>
-                      <p className="text-sm text-gray-700">Correct Answer: {correct ? `${optionLabel(correct.order_number)}${correct.option_text ? `. ${correct.option_text}` : ''}` : '-'}</p>
-                      <p className="text-sm text-gray-700 mt-2"><span className="font-medium">Explanation:</span> {item.explanation || 'No explanation provided.'}</p>
+                      <p className="text-xs sm:text-sm text-gray-700 break-words">Your Answer: {selected ? `${optionLabel(selected.order_number)}${selected.option_text ? `. ${selected.option_text}` : ''}` : 'Not answered'}</p>
+                      <p className="text-xs sm:text-sm text-gray-700 break-words">Correct Answer: {correct ? `${optionLabel(correct.order_number)}${correct.option_text ? `. ${correct.option_text}` : ''}` : '-'}</p>
+                      <p className="text-xs sm:text-sm text-gray-700 mt-2 break-words"><span className="font-medium">Explanation:</span> {item.explanation || 'No explanation provided.'}</p>
                     </div>
                   )
                 })}
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-black"
+                className="w-full sm:w-auto px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-black text-center"
               >
                 Back to Dashboard
               </button>
               <button
                 onClick={() => router.push('/student/courses')}
-                className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="w-full sm:w-auto px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-center"
               >
                 Browse Courses
               </button>

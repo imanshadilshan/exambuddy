@@ -3,7 +3,9 @@ ExamBuddy FastAPI Application
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+import os
 from app.config import settings
 from app.api.v1 import api_router
 from app.database import Base, engine
@@ -53,6 +55,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for uploads
+uploads_dir = "uploads"
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)

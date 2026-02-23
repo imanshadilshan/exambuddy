@@ -89,15 +89,7 @@ export default function ProfilePage() {
                   <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
                     {user?.profile?.district}
                   </span>
-                  {user?.profile?.has_paid ? (
-                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                      Premium Active
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-medium">
-                      Free Account
-                    </span>
-                  )}
+
                 </div>
               </div>
             </div>
@@ -202,32 +194,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Account Status */}
-          {!user?.profile?.has_paid && (
-            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-6">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">
-                    Activate Premium Access
-                  </h3>
-                  <p className="text-gray-700 mb-4 text-sm">
-                    Upgrade to premium to start taking practice exams and access all features.
-                  </p>
-                  <Link
-                    href="/payment"
-                    className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                  >
-                    Upgrade Now
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
+
         </div>
       </main>
     </div>

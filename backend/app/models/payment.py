@@ -58,7 +58,7 @@ class Payment(Base):
     )
     status = Column(
         SQLEnum(PaymentStatus, values_callable=enum_values, name="payment_status"),
-        default=PaymentStatus.PENDING,
+        default=PaymentStatus.PENDING.value,
         nullable=False,
     )
     
@@ -103,7 +103,7 @@ class BankSlip(Base):
     # Verification
     status = Column(
         SQLEnum(BankSlipStatus, values_callable=enum_values, name="bank_slip_status"),
-        default=BankSlipStatus.PENDING,
+        default=BankSlipStatus.PENDING.value,
         nullable=False,
     )
     verified_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

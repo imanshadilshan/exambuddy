@@ -13,6 +13,7 @@ export interface Course {
   description: string | null
   price: number
   is_active: boolean
+  is_enrolled?: boolean
 }
 
 export interface ExamWithAccess {
@@ -188,6 +189,18 @@ export const submitExamAttempt = async (
   return response.data
 }
 
+export interface LeaderboardEntry {
+  rank: number
+  full_name: string
+  school: string
+  district: string
+  grade: number
+  score: number
+  time_taken_seconds: number
+  attempts: number
+  is_current_user: boolean
+}
+
 export const getSubjectRanking = async (subject: string): Promise<SubjectRankResponse> => {
   const response = await apiClient.get(`/api/v1/student/rankings/subject/${encodeURIComponent(subject)}`)
   return response.data
@@ -196,6 +209,18 @@ export const getSubjectRanking = async (subject: string): Promise<SubjectRankRes
 export const getMyAttempts = async (limit = 10): Promise<MyAttemptItem[]> => {
   const response = await apiClient.get('/api/v1/student/my-attempts', {
     params: { limit },
+  })
+  return response.data
+}
+
+export const getRankingSubjects = async (): Promise<string[]> => {
+  const response = await apiClient.get('/api/v1/student/rankings/subjects')
+  return response.data
+}
+
+export const getRankingsLeaderboard = async (subject: string, limit = 50): Promise<LeaderboardEntry[]> => {
+  const response = await apiClient.get('/api/v1/student/rankings/leaderboard', {
+    params: { subject, limit },
   })
   return response.data
 }

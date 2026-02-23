@@ -36,6 +36,20 @@ export default function Navbar() {
             >
               Courses
             </Link>
+            <Link
+              href="/student/rankings"
+              className="px-3 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+            >
+              Rankings
+            </Link>
+            {isAuthenticated && (
+              <Link
+                href="/student/my-courses"
+                className="px-3 py-2 text-teal-700 hover:text-teal-900 font-medium transition-colors"
+              >
+                My Courses
+              </Link>
+            )}
             {isAuthenticated ? (
               <ProfileDropdown />
             ) : (

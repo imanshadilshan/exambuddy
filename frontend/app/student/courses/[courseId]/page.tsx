@@ -58,14 +58,13 @@ export default function CourseOverviewPage() {
     }
   }
 
-  const handlePurchaseExam = (examId: string) => {
-    // TODO: Implement payment flow
-    alert('Payment integration coming soon!')
+  const handlePurchaseExam = (exam: studentApi.ExamWithAccess) => {
+    router.push(`/payment?type=exam&id=${exam.id}&name=${encodeURIComponent(exam.title)}&amount=${exam.price}`)
   }
 
   const handlePurchaseCourse = () => {
-    // TODO: Implement course purchase flow
-    alert('Course purchase coming soon!')
+    if (!course) return
+    router.push(`/payment?type=course&id=${course.id}&name=${encodeURIComponent(course.title)}&amount=${course.price}`)
   }
 
   const handleStartExam = (examId: string) => {
@@ -143,17 +142,26 @@ export default function CourseOverviewPage() {
                       )}
                     </p>
                   </div>
-                  {course.price > 0 && (
+                  {course.is_enrolled ? (
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-100 text-green-800 border border-green-300 rounded-lg font-medium text-sm">
+                        ✓ Already Enrolled
+                      </span>
+                      <span className="text-xs text-gray-500">You have full access to this course</span>
+                    </div>
+                  ) : course.price > 0 ? (
                     <button
                       onClick={handlePurchaseCourse}
                       className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                     >
                       Purchase Full Course
                     </button>
-                  )}
+                  ) : null}
                 </div>
                 <p className="text-sm text-gray-500">
-                  Get access to all {exams.length} exams in this course
+                  {course.is_enrolled
+                    ? `You have access to all ${exams.length} exams in this course`
+                    : `Get access to all ${exams.length} exams in this course`}
                 </p>
               </div>
             </div>
@@ -218,7 +226,7 @@ export default function CourseOverviewPage() {
 interface ExamCardProps {
   exam: studentApi.ExamWithAccess
   onEnroll: (examId: string) => void
-  onPurchase: (examId: string) => void
+  onPurchase: (exam: studentApi.ExamWithAccess) => void
   onStart: (examId: string) => void
   enrolling: boolean
 }
@@ -277,7 +285,7 @@ function ExamCard({ exam, onEnroll, onPurchase, onStart, enrolling }: ExamCardPr
           </button>
         ) : (
           <button
-            onClick={() => onPurchase(exam.id)}
+            onClick={() => onPurchase(exam)}
             className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
           >
             Purchase Exam

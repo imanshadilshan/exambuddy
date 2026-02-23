@@ -40,6 +40,7 @@ class CourseResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
+    is_enrolled: bool = False
 
     class Config:
         from_attributes = True

@@ -61,6 +61,7 @@ def get_available_courses(
 @router.get("/courses/{course_id}", response_model=CourseResponse)
 def get_course_overview(
     course_id: UUID,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get course details with enrollment status"""
@@ -70,7 +71,32 @@ def get_course_overview(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found"
         )
-    return course
+
+    # Check if the authenticated user is already enrolled in this course
+    is_enrolled = False
+    current_user = get_optional_user(request, db)
+    if current_user:
+        enrollment = db.query(CourseEnrollment).filter(
+            CourseEnrollment.user_id == current_user.id,
+            CourseEnrollment.course_id == course_id,
+            CourseEnrollment.status == EnrollmentStatus.ACTIVE,
+        ).first()
+        is_enrolled = enrollment is not None
+
+    return {
+        "id": course.id,
+        "title": course.title,
+        "subject": course.subject,
+        "grade": course.grade,
+        "image_url": course.image_url,
+        "image_public_id": course.image_public_id,
+        "price": course.price,
+        "description": course.description,
+        "is_active": course.is_active,
+        "created_at": course.created_at,
+        "updated_at": course.updated_at,
+        "is_enrolled": is_enrolled,
+    }
 
 
 @router.get("/courses/{course_id}/exams")
@@ -532,6 +558,97 @@ def get_subject_rankings(
         "overall_rank": overall_rank,
         "district_rank": district_rank,
     }
+
+
+@router.get("/rankings/subjects")
+def get_ranking_subjects(
+    db: Session = Depends(get_db),
+):
+    """Return distinct subjects that have at least one completed exam attempt."""
+    rows = (
+        db.query(Course.subject)
+        .join(Exam, Exam.course_id == Course.id)
+        .join(ExamAttempt, ExamAttempt.exam_id == Exam.id)
+        .filter(
+            ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
+        )
+        .distinct()
+        .order_by(Course.subject.asc())
+        .all()
+    )
+    return [row.subject for row in rows]
+
+
+@router.get("/rankings/leaderboard")
+def get_rankings_leaderboard(
+    subject: str,
+    limit: int = 50,
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Return the leaderboard for a given subject.
+    Aggregates all completed attempts per student (sum score, sum time).
+    Optionally highlights the current user's row.
+    """
+    current_user = get_optional_user(request, db) if request else None
+
+    rows = (
+        db.query(
+            ExamAttempt.user_id.label("user_id"),
+            Student.full_name.label("full_name"),
+            Student.school.label("school"),
+            Student.district.label("district"),
+            Student.grade.label("grade"),
+            func.coalesce(func.sum(ExamAttempt.marks_obtained), 0).label("score"),
+            func.coalesce(func.sum(ExamAttempt.time_taken_seconds), 0).label("time_taken"),
+            func.count(ExamAttempt.id).label("attempts"),
+        )
+        .join(User, User.id == ExamAttempt.user_id)
+        .join(Student, Student.user_id == User.id)
+        .join(Exam, Exam.id == ExamAttempt.exam_id)
+        .join(Course, Course.id == Exam.course_id)
+        .filter(
+            Course.subject == subject,
+            ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
+        )
+        .group_by(
+            ExamAttempt.user_id,
+            Student.full_name,
+            Student.school,
+            Student.district,
+            Student.grade,
+        )
+        .order_by(
+            func.coalesce(func.sum(ExamAttempt.marks_obtained), 0).desc(),
+            func.coalesce(func.sum(ExamAttempt.time_taken_seconds), 0).asc(),
+        )
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
+
+    result = []
+    current_rank = 0
+    prev_key = None
+    for i, row in enumerate(rows, start=1):
+        key = (row.score, row.time_taken)
+        if key != prev_key:
+            current_rank = i
+            prev_key = key
+
+        result.append({
+            "rank": current_rank,
+            "full_name": row.full_name,
+            "school": row.school,
+            "district": row.district,
+            "grade": row.grade,
+            "score": row.score,
+            "time_taken_seconds": row.time_taken,
+            "attempts": row.attempts,
+            "is_current_user": (current_user is not None and str(row.user_id) == str(current_user.id)),
+        })
+
+    return result
 
 
 @router.get("/my-attempts")

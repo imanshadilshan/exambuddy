@@ -2,7 +2,7 @@
 Payment Schemas
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
 from uuid import UUID
 
@@ -60,5 +60,5 @@ class BankSlipResponse(BaseModel):
 
 
 class BankSlipVerification(BaseModel):
-    status: str  # "verified" or "rejected"
+    status: Literal['verified', 'rejected']
     rejection_reason: Optional[str] = None
