@@ -4,6 +4,8 @@ Authentication API Routes
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel
 from app.database import get_db
 from app.schemas.auth import UserLogin, StudentRegister, Token
 from app.schemas.user import UserResponse
@@ -12,6 +14,19 @@ from app.schemas.admin import AdminResponse
 from app.models.user import User, UserRole
 from app.models.student import Student
 from app.models.admin import Admin
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    school: Optional[str] = None
+    district: Optional[str] = None
+    grade: Optional[int] = None
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
 from app.core.security import (
     get_password_hash,
     verify_password,
@@ -231,3 +246,78 @@ async def logout(
         print(f"Logout cleanup failed: {e}")
     
     return {"message": "Successfully logged out"}
+
+
+@router.put("/profile")
+async def update_profile(
+    profile_data: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update the current user's profile information.
+    Students can update: full_name, phone_number, school, district, grade.
+    Admins can update: full_name.
+    """
+    if current_user.role == UserRole.STUDENT:
+        student = db.query(Student).filter(Student.user_id == current_user.id).first()
+        if not student:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        if profile_data.full_name is not None:
+            student.full_name = profile_data.full_name
+        if profile_data.phone_number is not None:
+            student.phone_number = profile_data.phone_number
+        if profile_data.school is not None:
+            student.school = profile_data.school
+        if profile_data.district is not None:
+            student.district = profile_data.district
+        if profile_data.grade is not None:
+            student.grade = profile_data.grade
+        db.commit()
+    elif current_user.role == UserRole.ADMIN:
+        admin = db.query(Admin).filter(Admin.user_id == current_user.id).first()
+        if not admin:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        if profile_data.full_name is not None:
+            admin.full_name = profile_data.full_name
+        db.commit()
+
+    # Invalidate user cache so next /me returns fresh data
+    try:
+        await cache.delete(f"user_profile:{current_user.id}")
+    except Exception:
+        pass
+
+    return {"message": "Profile updated successfully"}
+
+
+@router.put("/change-password")
+async def change_password(
+    request: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Change the current user's password.
+    Requires the existing password for verification.
+    """
+    if not verify_password(request.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    if len(request.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters"
+        )
+    current_user.password_hash = get_password_hash(request.new_password)
+    db.commit()
+
+    # Invalidate user cache
+    try:
+        await cache.delete(f"user_profile:{current_user.id}")
+    except Exception:
+        pass
+
+    return {"message": "Password changed successfully"}

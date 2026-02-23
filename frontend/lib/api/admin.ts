@@ -1,5 +1,117 @@
 import apiClient from './client'
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export interface AdminActivityItem {
+  type: 'student' | 'payment' | 'exam'
+  title: string
+  subtitle: string
+  timestamp: string | null
+}
+
+export interface AdminStats {
+  total_students: number
+  total_courses: number
+  total_exams: number
+  total_exam_attempts: number
+  total_revenue: number
+  revenue_this_month: number
+  pending_bank_slips: number
+  recent_activity: AdminActivityItem[]
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+
+export const getAdminStats = async (): Promise<AdminStats> => {
+  const response = await apiClient.get('/api/v1/admin/stats')
+  return response.data
+}
+
+// Students Management
+
+export interface AdminStudent {
+  user_id: string
+  email: string
+  is_active: boolean
+  joined_at: string | null
+  full_name: string
+  phone_number: string
+  school: string
+  district: string
+  grade: number
+  profile_photo_url: string | null
+  enrollment_count: number
+  attempt_count: number
+}
+
+export interface AdminStudentsResponse {
+  total: number
+  students: AdminStudent[]
+}
+
+export const getAdminStudents = async (params?: {
+  search?: string
+  grade?: number
+  district?: string
+  is_active?: boolean
+  skip?: number
+  limit?: number
+}): Promise<AdminStudentsResponse> => {
+  const response = await apiClient.get('/api/v1/admin/students', { params })
+  return response.data
+}
+
+export const toggleStudentActive = async (userId: string): Promise<{ user_id: string; is_active: boolean }> => {
+  const response = await apiClient.patch(`/api/v1/admin/students/${userId}/toggle-active`)
+  return response.data
+}
+
+// Analytics
+
+export interface AnalyticsData {
+  revenue_by_month: { year: number; month: number; revenue: number; count: number }[]
+  students_by_grade: { grade: number; count: number }[]
+  students_by_district: { district: string; count: number }[]
+  attempts_by_month: { year: number; month: number; count: number }[]
+  top_exams: { exam_id: string; title: string; subject: string; grade: number; attempt_count: number; avg_score: number }[]
+  enrollments_by_subject: { subject: string; count: number }[]
+}
+
+export const getAdminAnalytics = async (): Promise<AnalyticsData> => {
+  const response = await apiClient.get('/api/v1/admin/analytics')
+  return response.data
+}
+
+// Rankings
+
+export interface AdminRankingRow {
+  rank: number
+  user_id: string
+  full_name: string
+  district: string
+  grade: number
+  school: string
+  subject: string
+  total_marks: number
+  total_questions: number
+  score_pct: number
+  attempt_count: number
+}
+
+export interface AdminRankingsResponse {
+  rankings: AdminRankingRow[]
+  subjects: string[]
+}
+
+export const getAdminRankings = async (params?: {
+  subject?: string
+  grade?: number
+  limit?: number
+}): Promise<AdminRankingsResponse> => {
+  const response = await apiClient.get('/api/v1/admin/rankings', { params })
+  return response.data
+}
+
 // Course Management
 export const getCourses = async () => {
   const response = await apiClient.get('/api/v1/admin/courses')

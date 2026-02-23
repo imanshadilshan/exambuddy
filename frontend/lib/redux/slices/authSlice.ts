@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
 import { login as apiLogin, register as apiRegister, getCurrentUser } from '@/lib/api/auth'
+import apiClient from '@/lib/api/client'
 
 interface User {
   id: string
@@ -67,6 +68,18 @@ export const fetchCurrentUser = createAsyncThunk(
       return response
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to fetch user')
+    }
+  }
+)
+
+export const changePassword = createAsyncThunk(
+  'auth/changePassword',
+  async (data: { current_password: string; new_password: string }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.put('/api/v1/auth/change-password', data)
+      return response.data
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to change password')
     }
   }
 )
@@ -139,6 +152,18 @@ const authSlice = createSlice({
       .addCase(fetchCurrentUser.rejected, (state) => {
         state.isLoading = false
         state.isAuthenticated = false
+      })
+      // Change password
+      .addCase(changePassword.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(changePassword.fulfilled, (state) => {
+        state.isLoading = false
+      })
+      .addCase(changePassword.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload as string
       })
   },
 })

@@ -4,8 +4,10 @@ Admin Content Management APIs
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func, extract
 from typing import List
 from uuid import UUID
+from datetime import datetime, timezone
 import csv
 import io
 
@@ -16,6 +18,10 @@ from app.models.user import User
 from app.models.course import Course
 from app.models.exam import Exam
 from app.models.question import Question, QuestionOption
+from app.models.student import Student
+from app.models.payment import Payment, PaymentStatus, BankSlip, BankSlipStatus
+from app.models.exam_attempt import ExamAttempt, ExamAttemptStatus
+from app.models.enrollment import CourseEnrollment
 from app.schemas.course import CourseCreate, CourseUpdate, CourseResponse
 from app.schemas.exam import ExamCreate, ExamUpdate, ExamResponse
 from app.schemas.question import (
@@ -596,6 +602,117 @@ async def import_questions_csv(
         raise HTTPException(status_code=500, detail=f"Failed to process CSV: {str(e)}")
 
 
+@router.get("/stats")
+def get_admin_stats(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    """Comprehensive admin dashboard statistics with real data"""
+    now = datetime.now(timezone.utc)
+
+    # Platform counts
+    total_students = db.query(func.count(Student.id)).scalar() or 0
+    total_courses = db.query(func.count(Course.id)).filter(Course.is_active == True).scalar() or 0
+    total_exams = db.query(func.count(Exam.id)).filter(Exam.is_published == True).scalar() or 0
+    total_exam_attempts = (
+        db.query(func.count(ExamAttempt.id))
+        .filter(ExamAttempt.status == ExamAttemptStatus.SUBMITTED)
+        .scalar() or 0
+    )
+
+    # Revenue
+    total_revenue = (
+        db.query(func.sum(Payment.amount))
+        .filter(Payment.status == PaymentStatus.COMPLETED.value)
+        .scalar() or 0
+    )
+    revenue_this_month = (
+        db.query(func.sum(Payment.amount))
+        .filter(
+            Payment.status == PaymentStatus.COMPLETED.value,
+            extract('year', Payment.completed_at) == now.year,
+            extract('month', Payment.completed_at) == now.month,
+        )
+        .scalar() or 0
+    )
+    pending_bank_slips = (
+        db.query(func.count(BankSlip.id))
+        .filter(BankSlip.status == BankSlipStatus.PENDING.value)
+        .scalar() or 0
+    )
+
+    # Recent activity: new student registrations
+    recent_students = (
+        db.query(User, Student)
+        .join(Student, Student.user_id == User.id)
+        .order_by(User.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    # Recent verified bank slips
+    recent_payments = (
+        db.query(BankSlip, Student)
+        .join(Student, Student.user_id == BankSlip.user_id, isouter=True)
+        .filter(BankSlip.status == BankSlipStatus.VERIFIED.value)
+        .order_by(BankSlip.verified_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    # Recent exams created
+    recent_exams = (
+        db.query(Exam, Course)
+        .join(Course, Course.id == Exam.course_id)
+        .order_by(Exam.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    activity = []
+    for user, student in recent_students:
+        ts = user.created_at.isoformat() if user.created_at else None
+        activity.append({
+            "type": "student",
+            "title": "New student registration",
+            "subtitle": f"{student.full_name} joined from {student.district}",
+            "timestamp": ts,
+        })
+
+    for slip, student in recent_payments:
+        name = student.full_name if student else "Unknown"
+        ts = slip.verified_at.isoformat() if slip.verified_at else None
+        activity.append({
+            "type": "payment",
+            "title": "Payment verified",
+            "subtitle": f"Bank slip verified for {name}",
+            "timestamp": ts,
+        })
+
+    for exam, course in recent_exams:
+        ts = exam.created_at.isoformat() if exam.created_at else None
+        activity.append({
+            "type": "exam",
+            "title": "New exam uploaded",
+            "subtitle": f"{exam.title} — {course.title}",
+            "timestamp": ts,
+        })
+
+    activity.sort(key=lambda x: x["timestamp"] or "", reverse=True)
+    activity = activity[:8]
+
+    return {
+        "total_students": total_students,
+        "total_courses": total_courses,
+        "total_exams": total_exams,
+        "total_exam_attempts": total_exam_attempts,
+        "total_revenue": total_revenue,
+        "revenue_this_month": revenue_this_month,
+        "pending_bank_slips": pending_bank_slips,
+        "recent_activity": activity,
+    }
+
+
 @router.get("/questions/csv-template")
 def download_csv_template(
     _: User = Depends(get_current_admin)
@@ -615,3 +732,281 @@ What is 2 + 2?,3,4,5,6,,B,Basic arithmetic: 2 plus 2 equals 4.
     )
 
 
+# ============================================================================
+# STUDENTS MANAGEMENT
+# ============================================================================
+
+@router.get("/students")
+def list_students(
+    search: str | None = Query(default=None),
+    grade: int | None = Query(default=None),
+    district: str | None = Query(default=None),
+    is_active: bool | None = Query(default=None),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    """List all students with optional filters"""
+    query = (
+        db.query(User, Student)
+        .join(Student, Student.user_id == User.id)
+    )
+
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            (Student.full_name.ilike(like)) |
+            (User.email.ilike(like)) |
+            (Student.school.ilike(like))
+        )
+    if grade is not None:
+        query = query.filter(Student.grade == grade)
+    if district:
+        query = query.filter(Student.district.ilike(f"%{district}%"))
+    if is_active is not None:
+        query = query.filter(User.is_active == is_active)
+
+    total = query.count()
+    rows = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
+
+    result = []
+    for user, student in rows:
+        enrollment_count = (
+            db.query(func.count(CourseEnrollment.id))
+            .filter(CourseEnrollment.user_id == user.id)
+            .scalar() or 0
+        )
+        attempt_count = (
+            db.query(func.count(ExamAttempt.id))
+            .filter(ExamAttempt.user_id == user.id)
+            .scalar() or 0
+        )
+        result.append({
+            "user_id": str(user.id),
+            "email": user.email,
+            "is_active": user.is_active,
+            "joined_at": user.created_at.isoformat() if user.created_at else None,
+            "full_name": student.full_name,
+            "phone_number": student.phone_number,
+            "school": student.school,
+            "district": student.district,
+            "grade": student.grade,
+            "profile_photo_url": student.profile_photo_url,
+            "enrollment_count": enrollment_count,
+            "attempt_count": attempt_count,
+        })
+
+    return {"total": total, "students": result}
+
+
+@router.patch("/students/{user_id}/toggle-active")
+def toggle_student_active(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    """Activate or deactivate a student account"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_active = not user.is_active
+    db.commit()
+    db.refresh(user)
+    return {"user_id": str(user.id), "is_active": user.is_active}
+
+
+# ============================================================================
+# ANALYTICS
+# ============================================================================
+
+@router.get("/analytics")
+def get_analytics(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    """Platform-wide analytics for the admin dashboard"""
+
+    # Revenue by month (last 6 months)
+    revenue_rows = (
+        db.query(
+            extract("year", Payment.completed_at).label("year"),
+            extract("month", Payment.completed_at).label("month"),
+            func.sum(Payment.amount).label("revenue"),
+            func.count(Payment.id).label("count"),
+        )
+        .filter(Payment.status == PaymentStatus.COMPLETED.value)
+        .filter(Payment.completed_at.isnot(None))
+        .group_by("year", "month")
+        .order_by("year", "month")
+        .limit(12)
+        .all()
+    )
+    revenue_by_month = [
+        {"year": int(r.year), "month": int(r.month), "revenue": int(r.revenue or 0), "count": int(r.count)}
+        for r in revenue_rows
+    ]
+
+    # Students by grade
+    grade_rows = (
+        db.query(Student.grade, func.count(Student.id).label("count"))
+        .group_by(Student.grade)
+        .order_by(Student.grade)
+        .all()
+    )
+    students_by_grade = [{"grade": r.grade, "count": r.count} for r in grade_rows]
+
+    # Students by district (top 10)
+    district_rows = (
+        db.query(Student.district, func.count(Student.id).label("count"))
+        .group_by(Student.district)
+        .order_by(func.count(Student.id).desc())
+        .limit(10)
+        .all()
+    )
+    students_by_district = [{"district": r.district, "count": r.count} for r in district_rows]
+
+    # Exam attempts by month (last 6)
+    attempt_rows = (
+        db.query(
+            extract("year", ExamAttempt.submitted_at).label("year"),
+            extract("month", ExamAttempt.submitted_at).label("month"),
+            func.count(ExamAttempt.id).label("count"),
+        )
+        .filter(ExamAttempt.status == ExamAttemptStatus.SUBMITTED)
+        .filter(ExamAttempt.submitted_at.isnot(None))
+        .group_by("year", "month")
+        .order_by("year", "month")
+        .limit(12)
+        .all()
+    )
+    attempts_by_month = [
+        {"year": int(r.year), "month": int(r.month), "count": int(r.count)}
+        for r in attempt_rows
+    ]
+
+    # Top exams by attempt count with avg score
+    top_exams_q = (
+        db.query(
+            Exam.id,
+            Exam.title,
+            Course.subject,
+            Course.grade,
+            func.count(ExamAttempt.id).label("attempt_count"),
+            func.avg(
+                (ExamAttempt.marks_obtained * 100.0) / ExamAttempt.total_questions
+            ).label("avg_score"),
+        )
+        .join(Course, Course.id == Exam.course_id)
+        .outerjoin(ExamAttempt, ExamAttempt.exam_id == Exam.id)
+        .filter(ExamAttempt.status == ExamAttemptStatus.SUBMITTED)
+        .group_by(Exam.id, Exam.title, Course.subject, Course.grade)
+        .order_by(func.count(ExamAttempt.id).desc())
+        .limit(8)
+        .all()
+    )
+    top_exams = [
+        {
+            "exam_id": str(r.id),
+            "title": r.title,
+            "subject": r.subject,
+            "grade": r.grade,
+            "attempt_count": r.attempt_count,
+            "avg_score": round(float(r.avg_score or 0), 1),
+        }
+        for r in top_exams_q
+    ]
+
+    # Enrollments by subject
+    subject_rows = (
+        db.query(Course.subject, func.count(CourseEnrollment.id).label("count"))
+        .join(CourseEnrollment, CourseEnrollment.course_id == Course.id)
+        .group_by(Course.subject)
+        .order_by(func.count(CourseEnrollment.id).desc())
+        .all()
+    )
+    enrollments_by_subject = [{"subject": r.subject, "count": r.count} for r in subject_rows]
+
+    return {
+        "revenue_by_month": revenue_by_month,
+        "students_by_grade": students_by_grade,
+        "students_by_district": students_by_district,
+        "attempts_by_month": attempts_by_month,
+        "top_exams": top_exams,
+        "enrollments_by_subject": enrollments_by_subject,
+    }
+
+
+# ============================================================================
+# RANKINGS (admin view)
+# ============================================================================
+
+@router.get("/rankings")
+def admin_rankings(
+    subject: str | None = Query(default=None),
+    grade: int | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    """Admin view of subject rankings across all students"""
+    q = (
+        db.query(
+            User.id.label("user_id"),
+            Student.full_name,
+            Student.district,
+            Student.grade,
+            Student.school,
+            Course.subject,
+            func.sum(ExamAttempt.marks_obtained).label("total_marks"),
+            func.sum(ExamAttempt.total_questions).label("total_questions"),
+            func.count(ExamAttempt.id).label("attempt_count"),
+        )
+        .join(Student, Student.user_id == User.id)
+        .join(ExamAttempt, ExamAttempt.user_id == User.id)
+        .join(Exam, Exam.id == ExamAttempt.exam_id)
+        .join(Course, Course.id == Exam.course_id)
+        .filter(ExamAttempt.status == ExamAttemptStatus.SUBMITTED)
+    )
+    if subject:
+        q = q.filter(Course.subject.ilike(f"%{subject}%"))
+    if grade:
+        q = q.filter(Student.grade == grade)
+
+    q = (
+        q.group_by(User.id, Student.full_name, Student.district, Student.grade, Student.school, Course.subject)
+        .order_by(func.sum(ExamAttempt.marks_obtained).desc())
+        .limit(limit)
+    )
+
+    rows = q.all()
+    rankings = []
+    for i, r in enumerate(rows):
+        total_q = int(r.total_questions or 1)
+        pct = round((int(r.total_marks or 0) / total_q) * 100, 1)
+        rankings.append({
+            "rank": i + 1,
+            "user_id": str(r.user_id),
+            "full_name": r.full_name,
+            "district": r.district,
+            "grade": r.grade,
+            "school": r.school,
+            "subject": r.subject,
+            "total_marks": int(r.total_marks or 0),
+            "total_questions": total_q,
+            "score_pct": pct,
+            "attempt_count": int(r.attempt_count),
+        })
+
+    # Unique subjects for filter dropdown
+    subject_rows = (
+        db.query(Course.subject)
+        .join(Exam, Exam.course_id == Course.id)
+        .join(ExamAttempt, ExamAttempt.exam_id == Exam.id)
+        .filter(ExamAttempt.status == ExamAttemptStatus.SUBMITTED)
+        .distinct()
+        .all()
+    )
+    subjects = sorted([r.subject for r in subject_rows if r.subject])
+
+    return {"rankings": rankings, "subjects": subjects}

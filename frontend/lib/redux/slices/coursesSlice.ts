@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import * as adminApi from '@/lib/api/admin'
 
-interface Course {
+export interface Course {
   id: string
   title: string
   subject: string

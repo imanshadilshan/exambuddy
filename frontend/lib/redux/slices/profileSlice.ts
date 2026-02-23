@@ -32,7 +32,7 @@ export const fetchProfile = createAsyncThunk(
   'profile/fetch',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get('/api/v1/profile')
+      const response = await apiClient.get('/api/v1/auth/profile')
       return response.data
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to fetch profile')
@@ -44,7 +44,7 @@ export const updateProfile = createAsyncThunk(
   'profile/update',
   async (data: Partial<Profile>, { rejectWithValue }) => {
     try {
-      const response = await apiClient.put('/api/v1/profile', data)
+      const response = await apiClient.put('/api/v1/auth/profile', data)
       return response.data
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to update profile')

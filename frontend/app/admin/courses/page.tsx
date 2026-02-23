@@ -5,20 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import { fetchCourses, createCourse, updateCourse, deleteCourse, clearError } from '@/lib/redux/slices/coursesSlice'
+import { fetchCourses, createCourse, updateCourse, deleteCourse, clearError, Course } from '@/lib/redux/slices/coursesSlice'
 import { uploadImage, deleteImage } from '@/lib/api/admin'
-
-type Course = {
-  id: string
-  title: string
-  subject: string
-  grade: number
-  image_url: string | null
-  image_public_id?: string | null
-  price: number
-  description?: string | null
-  is_active?: boolean
-}
 
 export default function AdminCoursesPage() {
   const router = useRouter()
