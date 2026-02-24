@@ -117,6 +117,13 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Check if account is active
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Please contact support."
+        )
+    
     # Update last login
     user.last_login = datetime.utcnow()
     db.commit()
