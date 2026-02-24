@@ -159,9 +159,9 @@ def get_payhere_config(
     
     return {
         "merchant_id": PAYHERE_MERCHANT_ID,
-        "return_url": f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/payment/success",
-        "cancel_url": f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/payment/cancel",
-        "notify_url": f"{os.getenv('BACKEND_URL', 'http://localhost:8000')}/api/v1/payment/payhere/notify",
+        "return_url": f"{settings.FRONTEND_URL}/payment/success",
+        "cancel_url": f"{settings.FRONTEND_URL}/payment/cancel",
+        "notify_url": f"{settings.BACKEND_URL}/api/v1/payment/payhere/notify",
         "order_id": payment.payhere_order_id,
         "items": item_name,
         "currency": "LKR",

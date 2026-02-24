@@ -1,6 +1,11 @@
 import axios from 'axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// API Base URL from environment variable
+const API_URL = process.env.NEXT_PUBLIC_API_URL
+
+if (!API_URL) {
+  console.warn('NEXT_PUBLIC_API_URL is not set. API requests may fail.')
+}
 
 const apiClient = axios.create({
   baseURL: API_URL,

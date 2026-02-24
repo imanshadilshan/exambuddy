@@ -38,9 +38,6 @@ class Settings(BaseSettings):
     # PayHere
     PAYHERE_MERCHANT_ID: str = ""
     PAYHERE_MERCHANT_SECRET: str = ""
-    PAYHERE_NOTIFY_URL: str = ""
-    PAYHERE_RETURN_URL: str = ""
-    PAYHERE_CANCEL_URL: str = ""
     PAYHERE_MODE: str = "sandbox"
     PAYHERE_CURRENCY: str = "LKR"
     
@@ -51,12 +48,16 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     EMAIL_FROM: str = "noreply@exambuddy.com"
     
-    # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+    # URLs (Required - must be set in .env file)
+    FRONTEND_URL: str
+    BACKEND_URL: str
     
-    # Celery
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    # CORS (Required - must be set in .env file)
+    CORS_ORIGINS: str
+    
+    # Celery (Required - must be set in .env file)
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
     
     class Config:
         env_file = ".env"
