@@ -5,6 +5,8 @@ import json
 import redis.asyncio as redis
 from typing import Optional, Any
 from functools import wraps
+from redis.exceptions import ConnectionError as RedisConnectionError
+
 from app.config import settings
 
 # Redis connection pool
@@ -15,12 +17,16 @@ async def get_redis() -> redis.Redis:
     """Get Redis client instance"""
     global redis_client
     if redis_client is None:
-        redis_client = await redis.from_url(
-            f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
-            password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
-            encoding="utf-8",
-            decode_responses=True
-        )
+        try:
+            redis_client = await redis.from_url(
+                f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
+                password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
+                encoding="utf-8",
+                decode_responses=True
+            )
+        except (RedisConnectionError, OSError) as e:
+            print(f"Warning: Failed to connect to Redis. Running without cache. Error: {e}")
+            return None
     return redis_client
 
 
@@ -46,8 +52,16 @@ class RedisCache:
         """Get value from cache"""
         if not self.client:
             await self.initialize()
+            
+        if not self.client:
+            return None
         
-        value = await self.client.get(key)
+        try:
+            value = await self.client.get(key)
+        except (RedisConnectionError, OSError) as e:
+            print(f"Cache get error: Redis connection failed - {e}")
+            self.client = None
+            return None
         if value:
             try:
                 return json.loads(value)
@@ -59,6 +73,9 @@ class RedisCache:
         """Set value in cache with expiration time in seconds"""
         if not self.client:
             await self.initialize()
+            
+        if not self.client:
+            return False
         
         try:
             if isinstance(value, (dict, list)):
@@ -73,6 +90,9 @@ class RedisCache:
         """Delete key from cache"""
         if not self.client:
             await self.initialize()
+            
+        if not self.client:
+            return False
         
         try:
             await self.client.delete(key)
@@ -85,6 +105,9 @@ class RedisCache:
         """Check if key exists in cache"""
         if not self.client:
             await self.initialize()
+            
+        if not self.client:
+            return False
         
         return await self.client.exists(key) > 0
     
@@ -92,6 +115,9 @@ class RedisCache:
         """Delete all keys matching pattern"""
         if not self.client:
             await self.initialize()
+            
+        if not self.client:
+            return 0
         
         keys = await self.client.keys(pattern)
         if keys:
