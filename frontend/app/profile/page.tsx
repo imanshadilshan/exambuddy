@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
+import { fetchMyEnrollments } from '@/lib/redux/slices/studentDashboardSlice'
 import { getInitials } from '@/lib/utils/initials'
-import * as studentApi from '@/lib/api/student'
 
 export default function ProfilePage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
-  const [enrollments, setEnrollments] = useState<studentApi.MyEnrollmentsResponse>({ courses: [], exams: [] })
+  const { enrollments, loadingEnrollments } = useAppSelector((state) => state.studentDashboard)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -23,21 +23,12 @@ export default function ProfilePage() {
   }, [isAuthenticated, user, dispatch, router])
 
   useEffect(() => {
-    const loadEnrollments = async () => {
-      try {
-        const data = await studentApi.getMyEnrollments()
-        setEnrollments(data)
-      } catch {
-        setEnrollments({ courses: [], exams: [] })
-      }
-    }
-
     if (isAuthenticated) {
-      loadEnrollments()
+      dispatch(fetchMyEnrollments())
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, dispatch])
 
-  if (isLoading) {
+  if (isLoading || loadingEnrollments) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

@@ -23,9 +23,10 @@ Usage Examples:
     def submit_exam(user: User = Depends(require_payment)):
         ...
 """
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.core.security import verify_token
 from app.models.user import User, UserRole
@@ -33,6 +34,25 @@ from app.models.user import User, UserRole
 
 # Security scheme
 security = HTTPBearer()
+
+def get_optional_user(request: Request, db: Session) -> Optional[User]:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    payload = verify_token(token, token_type="access")
+    if not payload:
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+
+    return db.query(User).filter(User.id == user_id).first()
 
 
 def get_current_user(
@@ -70,9 +90,8 @@ def get_current_user(
     user_id: str = payload.get("sub")
     if user_id is None:
         raise credentials_exception
-    
-    # Get user from database
-    user = db.query(User).filter(User.id == user_id).first()
+    # Get user from database with student relationship explicitly loaded to prevent N+1 queries later
+    user = db.query(User).options(joinedload(User.student)).filter(User.id == user_id).first()
     if user is None:
         raise credentials_exception
     

@@ -4,8 +4,8 @@ import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { useAppSelector } from '@/lib/redux/hooks'
-import * as studentApi from '@/lib/api/student'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchRankingSubjects, fetchLeaderboard, fetchSubjectRank } from '@/lib/redux/slices/studentDashboardSlice'
 
 function medalColor(rank: number) {
   if (rank === 1) return 'text-yellow-500'
@@ -49,50 +49,47 @@ export default function RankingsPage() {
 function RankingsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const dispatch = useAppDispatch()
+  
   const { isAuthenticated } = useAppSelector((state) => state.auth)
+  const { 
+    rankingSubjects: subjects, 
+    leaderboard, 
+    subjectRank: myRank,
+    loadingRankings: loadingBoard 
+  } = useAppSelector((state) => state.studentDashboard)
 
-  const [subjects, setSubjects] = useState<string[]>([])
   const [activeSubject, setActiveSubject] = useState<string>('')
-  const [leaderboard, setLeaderboard] = useState<studentApi.LeaderboardEntry[]>([])
-  const [myRank, setMyRank] = useState<studentApi.LeaderboardEntry | null>(null)
   const [loading, setLoading] = useState(true)
-  const [loadingBoard, setLoadingBoard] = useState(false)
 
   // Load subjects on mount
   useEffect(() => {
-    const load = async () => {
-      try {
-        const subs = await studentApi.getRankingSubjects()
-        setSubjects(subs)
-        const initial = searchParams.get('subject') || subs[0] || ''
-        setActiveSubject(initial)
-      } catch {
-        setSubjects([])
-      } finally {
-        setLoading(false)
+    const initSubjects = async () => {
+      if (subjects.length === 0) {
+        await dispatch(fetchRankingSubjects())
       }
+      setLoading(false)
     }
-    load()
-  }, [])
+    initSubjects()
+  }, [dispatch, subjects.length])
+
+  // Set initial active subject
+  useEffect(() => {
+    if (subjects.length > 0 && !activeSubject) {
+      const initial = searchParams.get('subject') || subjects[0] || ''
+      setActiveSubject(initial)
+    }
+  }, [subjects, activeSubject, searchParams])
 
   // Load leaderboard when subject changes
   useEffect(() => {
     if (!activeSubject) return
-    const load = async () => {
-      setLoadingBoard(true)
-      try {
-        const data = await studentApi.getRankingsLeaderboard(activeSubject, 50)
-        setLeaderboard(data)
-        setMyRank(data.find((e) => e.is_current_user) ?? null)
-      } catch {
-        setLeaderboard([])
-        setMyRank(null)
-      } finally {
-        setLoadingBoard(false)
-      }
+    
+    dispatch(fetchLeaderboard({ subject: activeSubject, limit: 50 }))
+    if (isAuthenticated) {
+      dispatch(fetchSubjectRank(activeSubject))
     }
-    load()
-  }, [activeSubject])
+  }, [dispatch, activeSubject, isAuthenticated])
 
   const handleSubject = (sub: string) => {
     setActiveSubject(sub)
@@ -165,17 +162,14 @@ function RankingsContent() {
               <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-6 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    #{myRank.rank}
+                    #{myRank.overall_rank}
                   </div>
                   <div>
                     <p className="font-semibold text-teal-900">Your ranking in {activeSubject}</p>
-                    <p className="text-sm text-teal-700">
-                      Score: {myRank.score} pts &nbsp;•&nbsp; Time: {formatTime(myRank.time_taken_seconds)} &nbsp;•&nbsp; {myRank.attempts} attempt{myRank.attempts !== 1 ? 's' : ''}
-                    </p>
                   </div>
                 </div>
                 <span className="text-sm font-medium text-teal-600 bg-teal-100 px-3 py-1 rounded-full">
-                  Grade {myRank.grade} • {myRank.district}
+                  District Ranked: #{myRank.district_rank || '—'}
                 </span>
               </div>
             )}

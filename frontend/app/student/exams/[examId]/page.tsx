@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import * as studentApi from '@/lib/api/student'
-import { useAppSelector } from '@/lib/redux/hooks'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { startExam, submitExamAttempt } from '@/lib/redux/slices/examsSlice'
 
 function formatTime(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds)
@@ -20,12 +21,12 @@ export default function StudentExamPage() {
   const params = useParams()
   const router = useRouter()
   const examId = params?.examId as string
+  const dispatch = useAppDispatch()
+  
   const { user } = useAppSelector((state) => state.auth)
+  const { currentAttempt: examData, studentLoading: loading, studentError: error } = useAppSelector((state) => state.exams)
 
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [examData, setExamData] = useState<studentApi.StartExamResponse | null>(null)
   const [result, setResult] = useState<studentApi.SubmitExamResponse | null>(null)
   const [timeLeft, setTimeLeft] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string | null>>({})
@@ -78,23 +79,22 @@ export default function StudentExamPage() {
   useEffect(() => {
     const init = async () => {
       try {
-        setLoading(true)
-        const data = await studentApi.startExam(examId)
-        setExamData(data)
+        const action = await dispatch(startExam(examId))
+        
+        if (startExam.fulfilled.match(action)) {
+          const data = action.payload
+          const initialAnswers: Record<string, string | null> = {}
+          data.questions.forEach((q) => {
+            initialAnswers[q.id] = null
+          })
+          setAnswers(initialAnswers)
 
-        const initialAnswers: Record<string, string | null> = {}
-        data.questions.forEach((q) => {
-          initialAnswers[q.id] = null
-        })
-        setAnswers(initialAnswers)
-
-        const end = new Date(data.ends_at).getTime()
-        const now = Date.now()
-        setTimeLeft(Math.max(0, Math.floor((end - now) / 1000)))
+          const end = new Date(data.ends_at).getTime()
+          const now = Date.now()
+          setTimeLeft(Math.max(0, Math.floor((end - now) / 1000)))
+        }
       } catch (err: any) {
-        setError(err?.response?.data?.detail || err?.message || 'Failed to start exam')
-      } finally {
-        setLoading(false)
+        console.error('Failed to start exam:', err)
       }
     }
 
@@ -135,7 +135,6 @@ export default function StudentExamPage() {
 
     try {
       setSubmitting(true)
-      setError('')
 
       const payload: studentApi.SubmitExamRequest = {
         answers: examData.questions.map((q) => ({
@@ -144,13 +143,14 @@ export default function StudentExamPage() {
         })),
       }
 
-      const submitResult = await studentApi.submitExamAttempt(examData.attempt_id, payload)
-      setResult(submitResult)
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Failed to submit exam')
-      if (auto) {
-        setError('Time is up and auto-submit failed. Please click Submit Paper now.')
+      const action = await dispatch(submitExamAttempt({ attemptId: examData.attempt_id, payload }))
+      if (submitExamAttempt.fulfilled.match(action)) {
+        setResult(action.payload)
+      } else if (auto) {
+        alert('Time is up and auto-submit failed. Please click Submit Paper now.')
       }
+    } catch (err: any) {
+      console.error('Failed to submit exam:', err)
     } finally {
       setSubmitting(false)
     }
@@ -241,16 +241,24 @@ export default function StudentExamPage() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8" onCopy={(e) => e.preventDefault()}>
         {!result ? (
           <>
-            <div className="bg-white border-b border-gray-200 shadow-sm sticky top-16 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-2 sm:py-3 mb-4 sm:mb-6">
+            {/* Fixed Floating Timer */}
+            <div className="fixed top-4 sm:top-8 right-4 sm:right-8 z-50">
+              <div className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl shadow-lg border font-bold text-lg sm:text-xl backdrop-blur-sm ${timeLeft <= 60 ? 'bg-red-50/90 border-red-200 text-red-700' : 'bg-white/90 border-gray-200 text-gray-800'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {formatTime(timeLeft)}
+              </div>
+            </div>
+
+            {/* Static Header */}
+            <div className="bg-white border-b border-gray-200 shadow-sm -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-2 sm:py-3 mb-4 sm:mb-6">
               <div className="flex items-center justify-between gap-2 sm:gap-4">
                 <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                   <div className="min-w-0">
                     <h1 className="text-sm sm:text-lg font-bold text-gray-900 truncate">{examData.exam_title}</h1>
                     <p className="text-xs text-gray-600">{examData.subject} • Unanswered: {unansweredCount}</p>
                   </div>
-                </div>
-                <div className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap ${timeLeft <= 60 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {formatTime(timeLeft)}
                 </div>
               </div>
               {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
@@ -335,7 +343,7 @@ export default function StudentExamPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">
               <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">Answer Review</h2>
               <div className="space-y-3 sm:space-y-4">
-                {result.review.map((item, idx) => {
+                {result.review.map((item: any, idx: number) => {
                   const selected = getOptionForQuestion(item.question_id, item.selected_option_id)
                   const correct = getOptionForQuestion(item.question_id, item.correct_option_id)
                   return (

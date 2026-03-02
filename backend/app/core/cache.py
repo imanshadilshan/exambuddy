@@ -11,21 +11,28 @@ from app.config import settings
 
 # Redis connection pool
 redis_client: Optional[redis.Redis] = None
+_redis_unavailable: bool = False
 
-
-async def get_redis() -> redis.Redis:
+async def get_redis() -> Optional[redis.Redis]:
     """Get Redis client instance"""
-    global redis_client
+    global redis_client, _redis_unavailable
+    
+    if _redis_unavailable:
+        return None
+        
     if redis_client is None:
         try:
             redis_client = await redis.from_url(
                 f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
                 password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
                 encoding="utf-8",
-                decode_responses=True
+                decode_responses=True,
+                socket_timeout=1,
+                socket_connect_timeout=1
             )
-        except (RedisConnectionError, OSError) as e:
+        except Exception as e:
             print(f"Warning: Failed to connect to Redis. Running without cache. Error: {e}")
+            _redis_unavailable = True
             return None
     return redis_client
 

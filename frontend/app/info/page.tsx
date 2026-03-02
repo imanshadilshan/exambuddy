@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { getPlatformStats } from '@/lib/api/student'
-import type { PlatformStats } from '@/lib/api/student'
+import { useEffect } from 'react'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchPlatformStats } from '@/lib/redux/slices/studentDashboardSlice'
 
 const faqs = [
   {
@@ -42,11 +42,14 @@ const features = [
 ]
 
 export default function InfoPage() {
-  const [stats, setStats] = useState<PlatformStats | null>(null)
+  const dispatch = useAppDispatch()
+  const stats = useAppSelector((state) => state.studentDashboard.platformStats)
 
   useEffect(() => {
-    getPlatformStats().then(setStats).catch(() => {})
-  }, [])
+    if (!stats) {
+      dispatch(fetchPlatformStats())
+    }
+  }, [dispatch, stats])
 
   return (
     <main className="min-h-screen bg-white">

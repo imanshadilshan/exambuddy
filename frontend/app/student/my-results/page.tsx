@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAppSelector } from '@/lib/redux/hooks'
-import * as studentApi from '@/lib/api/student'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchMyAttempts } from '@/lib/redux/slices/studentDashboardSlice'
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60)
@@ -20,18 +20,21 @@ function scoreColor(pct: number) {
 
 export default function MyResultsPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
-  const [attempts, setAttempts] = useState<studentApi.MyAttemptItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const dispatch = useAppDispatch()
+  
+  const { isAuthenticated, isLoading: authLoading } = useAppSelector((state) => state.auth)
+  const { attempts, loadingAttempts } = useAppSelector((state) => state.studentDashboard)
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.push('/login')
-  }, [isAuthenticated, isLoading, router])
+    if (!authLoading && !isAuthenticated) router.push('/login')
+  }, [isAuthenticated, authLoading, router])
 
   useEffect(() => {
     if (!isAuthenticated) return
-    studentApi.getMyAttempts(50).then(setAttempts).catch(() => setAttempts([])).finally(() => setLoading(false))
-  }, [isAuthenticated])
+    if (attempts.length === 0) {
+      dispatch(fetchMyAttempts(50))
+    }
+  }, [dispatch, isAuthenticated, attempts.length])
 
   const totalAttempts = attempts.length
   const bestPct = totalAttempts
@@ -40,7 +43,7 @@ export default function MyResultsPage() {
       ))
     : 0
 
-  if (isLoading || loading) {
+  if (authLoading || loadingAttempts) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />

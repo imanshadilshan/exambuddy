@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import * as paymentApi from '@/lib/api/payment'
 
@@ -11,6 +11,18 @@ declare global {
 }
 
 export default function PayHerePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+      </div>
+    }>
+      <PayHereContent />
+    </Suspense>
+  )
+}
+
+function PayHereContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const paymentId = searchParams?.get('payment_id')

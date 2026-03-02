@@ -2,40 +2,25 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchCourseOverview, fetchCourseExams } from '@/lib/redux/slices/coursesSlice'
 import * as studentApi from '@/lib/api/student'
 
 export default function CourseOverviewPage() {
   const params = useParams()
   const router = useRouter()
   const courseId = params?.courseId as string
+  const dispatch = useAppDispatch()
 
-  const [course, setCourse] = useState<studentApi.Course | null>(null)
-  const [exams, setExams] = useState<studentApi.ExamWithAccess[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { currentCourse: course, currentCourseExams: exams, studentLoading: loading, studentError: error } = useAppSelector(state => state.courses)
   const [enrolling, setEnrolling] = useState<string | null>(null)
 
   useEffect(() => {
     if (courseId) {
-      loadCourseData()
+      dispatch(fetchCourseOverview(courseId))
+      dispatch(fetchCourseExams(courseId))
     }
-  }, [courseId])
-
-  const loadCourseData = async () => {
-    try {
-      setLoading(true)
-      const [courseData, examsData] = await Promise.all([
-        studentApi.getCourseOverview(courseId),
-        studentApi.getCourseExams(courseId),
-      ])
-      setCourse(courseData)
-      setExams(examsData)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load course data')
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [dispatch, courseId])
 
   const handleEnrollFreeExam = async (examId: string) => {
     try {
@@ -46,13 +31,11 @@ export default function CourseOverviewPage() {
       }
 
       setEnrolling(examId)
-      setError('')
       await studentApi.enrollFreeExam(examId)
       // Reload exams to update enrollment status
-      const examsData = await studentApi.getCourseExams(courseId)
-      setExams(examsData)
+      dispatch(fetchCourseExams(courseId))
     } catch (err: any) {
-      setError(err.message || 'Failed to enroll in exam')
+      alert(err.message || 'Failed to enroll in exam')
     } finally {
       setEnrolling(null)
     }

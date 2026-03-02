@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import * as studentApi from '@/lib/api/student'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchAvailableCourses } from '@/lib/redux/slices/coursesSlice'
 
 type SortOption = 'default' | 'price-asc' | 'price-desc' | 'grade-asc' | 'grade-desc'
 
@@ -144,9 +145,8 @@ function FilterPanel({
 
 // ── Main page ───────────────────────────────────────────────────────────────
 export default function StudentCoursesPage() {
-  const [courses, setCourses] = useState<studentApi.Course[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const dispatch = useAppDispatch()
+  const { availableCourses: courses, studentLoading: loading, studentError: error } = useAppSelector((state) => state.courses)
 
   // Filters
   const [search, setSearch] = useState('')
@@ -157,11 +157,10 @@ export default function StudentCoursesPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
-    studentApi.getAvailableCourses()
-      .then(setCourses)
-      .catch((err: Error) => setError(err.message || 'Failed to load courses'))
-      .finally(() => setLoading(false))
-  }, [])
+    if (courses.length === 0) {
+      dispatch(fetchAvailableCourses())
+    }
+  }, [dispatch, courses.length])
 
   // Unique subjects derived from courses
   const subjects = useMemo(

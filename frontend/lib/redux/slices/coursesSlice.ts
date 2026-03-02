@@ -1,7 +1,9 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import * as adminApi from '@/lib/api/admin'
+import * as studentApi from '@/lib/api/student'
+import { ExamWithAccess } from '@/lib/api/student'
 
-export interface Course {
+export interface AdminCourse {
   id: string
   title: string
   subject: string
@@ -14,15 +16,29 @@ export interface Course {
 }
 
 interface CoursesState {
-  courses: Course[]
+  // Admin states
+  courses: AdminCourse[]
   isLoading: boolean
   error: string | null
+
+  // Student states
+  availableCourses: studentApi.Course[]
+  currentCourse: studentApi.Course | null
+  currentCourseExams: ExamWithAccess[]
+  studentLoading: boolean
+  studentError: string | null
 }
 
 const initialState: CoursesState = {
   courses: [],
   isLoading: false,
   error: null,
+  
+  availableCourses: [],
+  currentCourse: null,
+  currentCourseExams: [],
+  studentLoading: false,
+  studentError: null,
 }
 
 // Async thunks
@@ -59,6 +75,43 @@ export const updateCourse = createAsyncThunk(
   }
 )
 
+// === Student Thunks ===
+
+export const fetchAvailableCourses = createAsyncThunk(
+  'courses/fetchAvailableCourses',
+  async (_, { rejectWithValue }) => {
+    try {
+      return await studentApi.getAvailableCourses()
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to load available courses')
+    }
+  }
+)
+
+export const fetchCourseOverview = createAsyncThunk(
+  'courses/fetchCourseOverview',
+  async (courseId: string, { rejectWithValue }) => {
+    try {
+      const data = await studentApi.getCourseOverview(courseId)
+      return data
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to load course details')
+    }
+  }
+)
+
+export const fetchCourseExams = createAsyncThunk(
+  'courses/fetchCourseExams',
+  async (courseId: string, { rejectWithValue }) => {
+    try {
+      const data = await studentApi.getCourseExams(courseId)
+      return data
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to load course exams')
+    }
+  }
+)
+
 export const deleteCourse = createAsyncThunk(
   'courses/deleteCourse',
   async (id: string, { rejectWithValue }) => {
@@ -86,7 +139,7 @@ const coursesSlice = createSlice({
         state.isLoading = true
         state.error = null
       })
-      .addCase(fetchCourses.fulfilled, (state, action: PayloadAction<Course[]>) => {
+      .addCase(fetchCourses.fulfilled, (state, action: PayloadAction<AdminCourse[]>) => {
         state.isLoading = false
         state.courses = action.payload
       })
@@ -99,7 +152,7 @@ const coursesSlice = createSlice({
         state.isLoading = true
         state.error = null
       })
-      .addCase(createCourse.fulfilled, (state, action: PayloadAction<Course>) => {
+      .addCase(createCourse.fulfilled, (state, action: PayloadAction<AdminCourse>) => {
         state.isLoading = false
         state.courses.unshift(action.payload)
       })
@@ -112,7 +165,7 @@ const coursesSlice = createSlice({
         state.isLoading = true
         state.error = null
       })
-      .addCase(updateCourse.fulfilled, (state, action: PayloadAction<Course>) => {
+      .addCase(updateCourse.fulfilled, (state, action: PayloadAction<AdminCourse>) => {
         state.isLoading = false
         const index = state.courses.findIndex(c => c.id === action.payload.id)
         if (index !== -1) {
@@ -135,6 +188,50 @@ const coursesSlice = createSlice({
       .addCase(deleteCourse.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload as string
+      })
+      
+      // === Student Thunk Reducers ===
+
+      // Fetch available courses
+      .addCase(fetchAvailableCourses.pending, (state) => {
+        state.studentLoading = true
+        state.studentError = null
+      })
+      .addCase(fetchAvailableCourses.fulfilled, (state, action: PayloadAction<studentApi.Course[]>) => {
+        state.studentLoading = false
+        state.availableCourses = action.payload
+      })
+      .addCase(fetchAvailableCourses.rejected, (state, action) => {
+        state.studentLoading = false
+        state.studentError = action.payload as string
+      })
+
+      // Fetch course overview
+      .addCase(fetchCourseOverview.pending, (state) => {
+        state.studentLoading = true
+        state.studentError = null
+      })
+      .addCase(fetchCourseOverview.fulfilled, (state, action: PayloadAction<studentApi.Course>) => {
+        state.studentLoading = false
+        state.currentCourse = action.payload
+      })
+      .addCase(fetchCourseOverview.rejected, (state, action) => {
+        state.studentLoading = false
+        state.studentError = action.payload as string
+      })
+      
+      // Fetch course exams
+      .addCase(fetchCourseExams.pending, (state) => {
+        state.studentLoading = true
+        state.studentError = null
+      })
+      .addCase(fetchCourseExams.fulfilled, (state, action: PayloadAction<ExamWithAccess[]>) => {
+        state.studentLoading = false
+        state.currentCourseExams = action.payload
+      })
+      .addCase(fetchCourseExams.rejected, (state, action) => {
+        state.studentLoading = false
+        state.studentError = action.payload as string
       })
   },
 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
@@ -25,7 +25,7 @@ function fmtLKR(amount: number) {
   return `Rs ${amount}`
 }
 
-const activityIcons: Record<string, { bg: string; color: string; icon: JSX.Element }> = {
+const activityIcons: Record<string, { bg: string; color: string; icon: ReactNode }> = {
   student: {
     bg: 'bg-blue-100',
     color: 'text-blue-600',

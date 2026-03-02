@@ -14,6 +14,9 @@ import io
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.config import settings
+from app.services.course_service import CourseService
+from app.services.exam_service import ExamService
+from app.services.question_service import QuestionService
 from app.models.user import User
 from app.models.course import Course
 from app.models.exam import Exam
@@ -125,20 +128,8 @@ def create_course(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    course = Course(
-        title=payload.title,
-        subject=payload.subject,
-        grade=payload.grade,
-        image_url=payload.image_url,
-        image_public_id=payload.image_public_id,
-        price=payload.price,
-        description=payload.description,
-        is_active=True,
-    )
-    db.add(course)
-    db.commit()
-    db.refresh(course)
-    return course
+    service = CourseService(db)
+    return service.create_course(payload)
 
 
 @router.get("/courses", response_model=List[CourseResponse])
@@ -148,14 +139,8 @@ def list_courses(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    query = db.query(Course)
-
-    if grade is not None:
-        query = query.filter(Course.grade == grade)
-    if subject:
-        query = query.filter(Course.subject.ilike(f"%{subject}%"))
-
-    return query.order_by(Course.grade.asc(), Course.subject.asc(), Course.title.asc()).all()
+    service = CourseService(db)
+    return service.list_courses(grade=grade, subject=subject)
 
 
 @router.put("/courses/{course_id}", response_model=CourseResponse)
@@ -165,17 +150,8 @@ def update_course(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    course = db.query(Course).filter(Course.id == course_id).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-
-    data = payload.model_dump(exclude_unset=True)
-    for field, value in data.items():
-        setattr(course, field, value)
-
-    db.commit()
-    db.refresh(course)
-    return course
+    service = CourseService(db)
+    return service.update_course(course_id, payload)
 
 
 @router.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -184,12 +160,8 @@ def delete_course(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    course = db.query(Course).filter(Course.id == course_id).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-
-    db.delete(course)
-    db.commit()
+    service = CourseService(db)
+    service.delete_course(course_id)
     return None
 
 
@@ -199,24 +171,8 @@ def create_exam(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    course = db.query(Course).filter(Course.id == payload.course_id).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-
-    exam = Exam(
-        course_id=payload.course_id,
-        title=payload.title,
-        image_url=payload.image_url,
-        image_public_id=payload.image_public_id,
-        description=payload.description,
-        duration_minutes=payload.duration_minutes,
-        total_questions=payload.total_questions,
-        is_published=False,
-    )
-    db.add(exam)
-    db.commit()
-    db.refresh(exam)
-    return exam
+    service = ExamService(db)
+    return service.create_exam(payload)
 
 
 @router.get("/exams", response_model=List[ExamResponse])
@@ -225,11 +181,8 @@ def list_exams(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    query = db.query(Exam)
-    if course_id:
-        query = query.filter(Exam.course_id == course_id)
-
-    return query.order_by(Exam.created_at.desc()).all()
+    service = ExamService(db)
+    return service.list_exams(course_id=course_id)
 
 
 @router.put("/exams/{exam_id}", response_model=ExamResponse)
@@ -239,22 +192,8 @@ def update_exam(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    exam = db.query(Exam).filter(Exam.id == exam_id).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-
-    data = payload.model_dump(exclude_unset=True)
-    if "course_id" in data:
-        course = db.query(Course).filter(Course.id == data["course_id"]).first()
-        if not course:
-            raise HTTPException(status_code=404, detail="Course not found")
-
-    for field, value in data.items():
-        setattr(exam, field, value)
-
-    db.commit()
-    db.refresh(exam)
-    return exam
+    service = ExamService(db)
+    return service.update_exam(exam_id, payload)
 
 
 @router.delete("/exams/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -263,12 +202,8 @@ def delete_exam(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    exam = db.query(Exam).filter(Exam.id == exam_id).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-
-    db.delete(exam)
-    db.commit()
+    service = ExamService(db)
+    service.delete_exam(exam_id)
     return None
 
 
@@ -283,54 +218,8 @@ def create_question(
     _: User = Depends(get_current_admin)
 ):
     """Create a new question for an exam"""
-    # Verify exam exists
-    exam = db.query(Exam).filter(Exam.id == payload.exam_id).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-
-    # Validate that at least one option is correct
-    correct_options = [opt for opt in payload.options if opt.is_correct]
-    if len(correct_options) != 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Exactly one option must be marked as correct"
-        )
-
-    # Validate that each option has either text or image
-    for idx, opt in enumerate(payload.options):
-        if not opt.option_text and not opt.option_image_url:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Option {idx + 1} must have either text or image"
-            )
-
-    # Create question
-    question = Question(
-        exam_id=payload.exam_id,
-        question_text=payload.question_text,
-        question_image_url=payload.question_image_url,
-        question_image_public_id=payload.question_image_public_id,
-        explanation=payload.explanation,
-        order_number=payload.order_number,
-    )
-    db.add(question)
-    db.flush()  # Get the question ID before adding options
-
-    # Create options
-    for option_data in payload.options:
-        option = QuestionOption(
-            question_id=question.id,
-            option_text=option_data.option_text,
-            option_image_url=option_data.option_image_url,
-            option_image_public_id=option_data.option_image_public_id,
-            is_correct=option_data.is_correct,
-            order_number=option_data.order_number,
-        )
-        db.add(option)
-
-    db.commit()
-    db.refresh(question)
-    return question
+    service = QuestionService(db)
+    return service.create_question(payload)
 
 
 @router.get("/questions", response_model=List[QuestionResponse])
@@ -340,18 +229,8 @@ def list_questions(
     _: User = Depends(get_current_admin)
 ):
     """List all questions for an exam"""
-    # Verify exam exists
-    exam = db.query(Exam).filter(Exam.id == exam_id).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-
-    questions = (
-        db.query(Question)
-        .filter(Question.exam_id == exam_id)
-        .order_by(Question.order_number.asc())
-        .all()
-    )
-    return questions
+    service = QuestionService(db)
+    return service.list_questions(exam_id)
 
 
 @router.get("/questions/{question_id}", response_model=QuestionResponse)
@@ -361,10 +240,8 @@ def get_question(
     _: User = Depends(get_current_admin)
 ):
     """Get a specific question by ID"""
-    question = db.query(Question).filter(Question.id == question_id).first()
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-    return question
+    service = QuestionService(db)
+    return service.get_question(question_id)
 
 
 @router.put("/questions/{question_id}", response_model=QuestionResponse)
@@ -375,80 +252,8 @@ def update_question(
     _: User = Depends(get_current_admin)
 ):
     """Update a question and clean up replaced images from Cloudinary"""
-    question = db.query(Question).filter(Question.id == question_id).first()
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-
-    import cloudinary
-    import cloudinary.uploader
-
-    cloudinary.config(
-        cloud_name=settings.CLOUDINARY_CLOUD_NAME,
-        api_key=settings.CLOUDINARY_API_KEY,
-        api_secret=settings.CLOUDINARY_API_SECRET,
-        secure=True,
-    )
-
-    # Check if question image is being replaced
-    if payload.question_image_public_id is not None:
-        old_image_public_id = question.question_image_public_id
-        new_image_public_id = payload.question_image_public_id
-        
-        # Delete old image if it's being replaced with a different one
-        if old_image_public_id and old_image_public_id != new_image_public_id:
-            try:
-                cloudinary.uploader.destroy(old_image_public_id)
-            except Exception as e:
-                print(f"Failed to delete old question image: {str(e)}")
-
-    # Update question fields
-    update_data = payload.model_dump(exclude_unset=True, exclude={"options"})
-    for field, value in update_data.items():
-        setattr(question, field, value)
-
-    # Update options if provided
-    if payload.options is not None:
-        # Validate that at least one option is correct
-        correct_options = [opt for opt in payload.options if opt.is_correct]
-        if len(correct_options) != 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Exactly one option must be marked as correct"
-            )
-
-        # Collect old option image public_ids before deleting
-        old_options = db.query(QuestionOption).filter(QuestionOption.question_id == question_id).all()
-        old_image_public_ids = {opt.option_image_public_id for opt in old_options if opt.option_image_public_id}
-        
-        # Collect new option image public_ids to keep
-        new_image_public_ids = {opt.option_image_public_id for opt in payload.options if opt.option_image_public_id}
-        
-        # Delete images that are being replaced (old images not in new set)
-        images_to_delete = old_image_public_ids - new_image_public_ids
-        for public_id in images_to_delete:
-            try:
-                cloudinary.uploader.destroy(public_id)
-            except Exception as e:
-                print(f"Failed to delete old option image: {str(e)}")
-
-        # Delete existing options from database
-        db.query(QuestionOption).filter(QuestionOption.question_id == question_id).delete()
-
-        # Create new options
-        for option_data in payload.options:
-            option = QuestionOption(
-                question_id=question_id,
-                option_text=option_data.option_text,
-                option_image_url=option_data.option_image_url,
-                option_image_public_id=option_data.option_image_public_id,
-                is_correct=option_data.is_correct,
-                order_number=option_data.order_number,
-            )
-            db.add(option)
-
-    db.commit()
-    db.refresh(question)
-    return question
+    service = QuestionService(db)
+    return service.update_question(question_id, payload)
 
 
 @router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -458,40 +263,8 @@ def delete_question(
     _: User = Depends(get_current_admin)
 ):
     """Delete a question and all associated images from Cloudinary and database"""
-    question = db.query(Question).filter(Question.id == question_id).first()
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-
-    # Delete images from Cloudinary
-    import cloudinary
-    import cloudinary.uploader
-
-    cloudinary.config(
-        cloud_name=settings.CLOUDINARY_CLOUD_NAME,
-        api_key=settings.CLOUDINARY_API_KEY,
-        api_secret=settings.CLOUDINARY_API_SECRET,
-        secure=True,
-    )
-
-    # Delete question image if exists
-    if question.question_image_public_id:
-        try:
-            cloudinary.uploader.destroy(question.question_image_public_id)
-        except Exception as e:
-            # Log but don't fail if image deletion fails
-            print(f"Failed to delete question image: {str(e)}")
-
-    # Delete all option images
-    for option in question.options:
-        if option.option_image_public_id:
-            try:
-                cloudinary.uploader.destroy(option.option_image_public_id)
-            except Exception as e:
-                print(f"Failed to delete option image: {str(e)}")
-
-    # Delete question from database (cascade will delete options)
-    db.delete(question)
-    db.commit()
+    service = QuestionService(db)
+    service.delete_question(question_id)
     return None
 
 
@@ -506,100 +279,8 @@ async def import_questions_csv(
     Import questions from CSV file
     CSV format: question_text,option_a,option_b,option_c,option_d,correct_answer,explanation
     """
-    # Verify exam exists
-    exam = db.query(Exam).filter(Exam.id == exam_id).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="File must be a CSV")
-
-    # Get course to determine grade
-    course = db.query(Course).filter(Course.id == exam.course_id).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-    
-    # Determine expected options based on grade
-    grade = course.grade
-    has_five_options = grade in [12, 13]
-
-    try:
-        content = await file.read()
-        decoded = content.decode('utf-8')
-        csv_reader = csv.DictReader(io.StringIO(decoded))
-
-        # Get the current max order number
-        max_order = db.query(Question).filter(Question.exam_id == exam_id).count()
-
-        questions_created = 0
-        errors = []
-
-        for idx, row in enumerate(csv_reader, start=1):
-            try:
-                # Validate required fields
-                required_fields = ['question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
-                if has_five_options:
-                    required_fields.append('option_e')
-                    
-                missing_fields = [f for f in required_fields if f not in row or not row[f].strip()]
-                
-                if missing_fields:
-                    errors.append(f"Row {idx}: Missing fields: {', '.join(missing_fields)}")
-                    continue
-
-                # Validate correct_answer
-                correct_answer = row['correct_answer'].strip().upper()
-                valid_answers = ['A', 'B', 'C', 'D', 'E'] if has_five_options else ['A', 'B', 'C', 'D']
-                if correct_answer not in valid_answers:
-                    errors.append(f"Row {idx}: correct_answer must be {' or '.join(valid_answers)}")
-                    continue
-
-                # Create question
-                question = Question(
-                    exam_id=exam_id,
-                    question_text=row['question_text'].strip(),
-                    explanation=row.get('explanation', '').strip() or None,
-                    order_number=max_order + questions_created + 1,
-                )
-                db.add(question)
-                db.flush()
-
-                # Create options
-                options_data = [
-                    ('A', row['option_a'].strip(), 1),
-                    ('B', row['option_b'].strip(), 2),
-                    ('C', row['option_c'].strip(), 3),
-                    ('D', row['option_d'].strip(), 4),
-                ]
-                
-                if has_five_options:
-                    options_data.append(('E', row['option_e'].strip(), 5))
-
-                for letter, text, order in options_data:
-                    option = QuestionOption(
-                        question_id=question.id,
-                        option_text=text,
-                        is_correct=(letter == correct_answer),
-                        order_number=order,
-                    )
-                    db.add(option)
-
-                questions_created += 1
-
-            except Exception as e:
-                errors.append(f"Row {idx}: {str(e)}")
-                continue
-
-        db.commit()
-
-        return {
-            "message": f"Successfully imported {questions_created} questions",
-            "questions_created": questions_created,
-            "errors": errors if errors else None
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process CSV: {str(e)}")
+    service = QuestionService(db)
+    return await service.import_questions_csv(exam_id, file)
 
 
 @router.get("/stats")

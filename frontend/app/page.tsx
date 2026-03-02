@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
-import { getPlatformStats, getRankingSubjects, getRankingsLeaderboard } from '@/lib/api/student'
-import type { PlatformStats, LeaderboardEntry, TopCourse } from '@/lib/api/student'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchPlatformStats, fetchRankingSubjects, fetchLeaderboard } from '@/lib/redux/slices/studentDashboardSlice'
+import type { TopCourse, LeaderboardEntry } from '@/lib/api/student'
 
 // ---------- Animated counter hook ----------
 function useCountUp(target: number, duration = 1800, start = false) {
@@ -47,21 +48,29 @@ function subjectColor(s: string) {
 const medals = ['🥇', '🥈', '🥉']
 
 export default function Home() {
-  const [stats, setStats] = useState<PlatformStats | null>(null)
-  const [topPerformers, setTopPerformers] = useState<LeaderboardEntry[]>([])
+  const dispatch = useAppDispatch()
+  
+  const stats = useAppSelector((state) => state.studentDashboard.platformStats)
+  const topPerformers = useAppSelector((state) => state.studentDashboard.leaderboard)
+  const rankingSubjects = useAppSelector((state) => state.studentDashboard.rankingSubjects)
+
   const [statsVisible, setStatsVisible] = useState(false)
   const statsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    getPlatformStats().then(setStats).catch(() => {})
-    getRankingSubjects()
-      .then((subjects) => {
-        if (subjects.length > 0) return getRankingsLeaderboard(subjects[0], 3)
-        return []
-      })
-      .then(setTopPerformers)
-      .catch(() => {})
-  }, [])
+    if (!stats) {
+      dispatch(fetchPlatformStats())
+    }
+    if (rankingSubjects.length === 0) {
+      dispatch(fetchRankingSubjects())
+    }
+  }, [dispatch, stats, rankingSubjects.length])
+
+  useEffect(() => {
+    if (rankingSubjects.length > 0 && topPerformers.length === 0) {
+      dispatch(fetchLeaderboard({ subject: rankingSubjects[0], limit: 3 }))
+    }
+  }, [dispatch, rankingSubjects, topPerformers.length])
 
   useEffect(() => {
     const el = statsRef.current

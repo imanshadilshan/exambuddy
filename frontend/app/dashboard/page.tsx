@@ -1,20 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import * as studentApi from '@/lib/api/student'
+import { fetchMyEnrollments, fetchMyAttempts } from '@/lib/redux/slices/studentDashboardSlice'
 
 export default function DashboardPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
-  const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
-  const [enrollments, setEnrollments] = useState<studentApi.MyEnrollmentsResponse>({ courses: [], exams: [] })
-  const [loadingEnrollments, setLoadingEnrollments] = useState(false)
-  const [attempts, setAttempts] = useState<studentApi.MyAttemptItem[]>([])
-  const [loadingAttempts, setLoadingAttempts] = useState(false)
+  
+  const { user, isAuthenticated, isLoading: authLoading } = useAppSelector((state) => state.auth)
+  const { 
+    enrollments, 
+    attempts, 
+    loadingEnrollments, 
+    loadingAttempts 
+  } = useAppSelector((state) => state.studentDashboard)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -25,40 +28,11 @@ export default function DashboardPage() {
   }, [isAuthenticated, user, dispatch, router])
 
   useEffect(() => {
-    const loadEnrollments = async () => {
-      try {
-        setLoadingEnrollments(true)
-        const data = await studentApi.getMyEnrollments()
-        setEnrollments(data)
-      } catch {
-        setEnrollments({ courses: [], exams: [] })
-      } finally {
-        setLoadingEnrollments(false)
-      }
-    }
-
     if (isAuthenticated) {
-      loadEnrollments()
+      dispatch(fetchMyEnrollments())
+      dispatch(fetchMyAttempts(10))
     }
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    const loadAttempts = async () => {
-      try {
-        setLoadingAttempts(true)
-        const data = await studentApi.getMyAttempts(10)
-        setAttempts(data)
-      } catch {
-        setAttempts([])
-      } finally {
-        setLoadingAttempts(false)
-      }
-    }
-
-    if (isAuthenticated) {
-      loadAttempts()
-    }
-  }, [isAuthenticated])
+  }, [isAuthenticated, dispatch])
 
   const averagePercentage = attempts.length
     ? Math.round(
@@ -69,7 +43,7 @@ export default function DashboardPage() {
       )
     : 0
 
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

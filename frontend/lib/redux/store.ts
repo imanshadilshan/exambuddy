@@ -2,11 +2,10 @@ import { configureStore } from '@reduxjs/toolkit'
 import authReducer from './slices/authSlice'
 import uiReducer from './slices/uiSlice'
 import profileReducer from './slices/profileSlice'
-import papersReducer from './slices/papersSlice'
-import rankingsReducer from './slices/rankingsSlice'
 import coursesReducer from './slices/coursesSlice'
 import examsReducer from './slices/examsSlice'
 import questionsReducer from './slices/questionsSlice'
+import studentDashboardReducer from './slices/studentDashboardSlice'
 import { errorHandlingMiddleware, loadingMiddleware } from './middleware'
 
 export const store = configureStore({
@@ -14,11 +13,10 @@ export const store = configureStore({
     auth: authReducer,
     ui: uiReducer,
     profile: profileReducer,
-    papers: papersReducer,
-    rankings: rankingsReducer,
     courses: coursesReducer,
     exams: examsReducer,
     questions: questionsReducer,
+    studentDashboard: studentDashboardReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

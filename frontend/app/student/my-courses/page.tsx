@@ -1,39 +1,32 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAppSelector } from '@/lib/redux/hooks'
-import * as studentApi from '@/lib/api/student'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchMyEnrollments } from '@/lib/redux/slices/studentDashboardSlice'
 
 export default function MyCoursesPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
-  const [enrollments, setEnrollments] = useState<studentApi.MyEnrollmentsResponse>({ courses: [], exams: [] })
-  const [loading, setLoading] = useState(true)
+  const dispatch = useAppDispatch()
+
+  const { isAuthenticated, isLoading: authLoading } = useAppSelector((state) => state.auth)
+  const { enrollments, loadingEnrollments } = useAppSelector((state) => state.studentDashboard)
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       router.push('/login')
     }
-  }, [isAuthenticated, isLoading, router])
+  }, [isAuthenticated, authLoading, router])
 
   useEffect(() => {
     if (!isAuthenticated) return
-    const load = async () => {
-      try {
-        const data = await studentApi.getMyEnrollments()
-        setEnrollments(data)
-      } catch {
-        setEnrollments({ courses: [], exams: [] })
-      } finally {
-        setLoading(false)
-      }
+    if (enrollments.courses.length === 0 && enrollments.exams.length === 0) {
+      dispatch(fetchMyEnrollments())
     }
-    load()
-  }, [isAuthenticated])
+  }, [dispatch, isAuthenticated, enrollments])
 
-  if (isLoading || loading) {
+  if (authLoading || loadingEnrollments) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

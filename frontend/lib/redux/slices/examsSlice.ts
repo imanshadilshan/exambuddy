@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import * as adminApi from '@/lib/api/admin'
-
+import * as studentApi from '@/lib/api/student'
 interface Exam {
   id: string
   course_id: string
@@ -14,15 +14,25 @@ interface Exam {
 }
 
 interface ExamsState {
+  // Admin stats
   exams: Exam[]
   isLoading: boolean
   error: string | null
+
+  // Student stats
+  currentAttempt: studentApi.StartExamResponse | null
+  studentLoading: boolean
+  studentError: string | null
 }
 
 const initialState: ExamsState = {
   exams: [],
   isLoading: false,
   error: null,
+  
+  currentAttempt: null,
+  studentLoading: false,
+  studentError: null
 }
 
 // Async thunks
@@ -67,6 +77,30 @@ export const deleteExam = createAsyncThunk(
       return id
     } catch (error: any) {
       return rejectWithValue(error?.response?.data?.detail || 'Failed to delete exam')
+    }
+  }
+)
+
+export const startExam = createAsyncThunk(
+  'exams/startExam',
+  async (examId: string, { rejectWithValue }) => {
+    try {
+      const resp = await studentApi.startExam(examId)
+      return resp
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to start exam')
+    }
+  }
+)
+
+export const submitExamAttempt = createAsyncThunk(
+  'exams/submitExamAttempt',
+  async ({ attemptId, payload }: { attemptId: string, payload: studentApi.SubmitExamRequest }, { rejectWithValue }) => {
+    try {
+      const resp = await studentApi.submitExamAttempt(attemptId, payload)
+      return resp
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to submit exam attempt')
     }
   }
 )
@@ -135,6 +169,31 @@ const examsSlice = createSlice({
       .addCase(deleteExam.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload as string
+      })
+      // Student Exams
+      .addCase(startExam.pending, (state) => {
+        state.studentLoading = true
+        state.studentError = null
+      })
+      .addCase(startExam.fulfilled, (state, action: PayloadAction<studentApi.StartExamResponse>) => {
+        state.studentLoading = false
+        state.currentAttempt = action.payload
+      })
+      .addCase(startExam.rejected, (state, action) => {
+        state.studentLoading = false
+        state.studentError = action.payload as string
+      })
+      .addCase(submitExamAttempt.pending, (state) => {
+        state.studentLoading = true
+        state.studentError = null
+      })
+      .addCase(submitExamAttempt.fulfilled, (state) => {
+        state.studentLoading = false
+        // DO NOT clear currentAttempt here; the result page needs it for review mapping
+      })
+      .addCase(submitExamAttempt.rejected, (state, action) => {
+        state.studentLoading = false
+        state.studentError = action.payload as string
       })
   },
 })

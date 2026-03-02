@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import { fetchCourses, createCourse, updateCourse, deleteCourse, clearError, Course } from '@/lib/redux/slices/coursesSlice'
+import { fetchCourses, createCourse, updateCourse, deleteCourse, clearError, AdminCourse } from '@/lib/redux/slices/coursesSlice'
 import { uploadImage, deleteImage } from '@/lib/api/admin'
 
 export default function AdminCoursesPage() {
@@ -182,7 +182,7 @@ export default function AdminCoursesPage() {
     setCourseImageFile(null)
   }
 
-  const openEditModal = (course: Course) => {
+  const openEditModal = (course: AdminCourse) => {
     setLocalError('')
     setCourseForm({
       title: course.title,
@@ -304,7 +304,7 @@ export default function AdminCoursesPage() {
     }
   }
 
-  const handleDeleteCourse = async (course: Course) => {
+  const handleDeleteCourse = async (course: AdminCourse) => {
     const confirmed = window.confirm(`Delete course "${course.title}"? All exams inside this course will also be deleted.`)
     if (!confirmed) return
 
