@@ -174,8 +174,8 @@ export default function MyCoursesPage() {
                           <>
                             <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 border border-gray-300 px-2 py-1 rounded-full font-medium">
                               ✓ Completed
-                              {item.last_score !== null && item.last_total !== null && (
-                                <span className="font-bold ml-1">{item.last_score}/{item.last_total}</span>
+                              {item.last_score !== null && item.last_total !== null && item.last_total > 0 && (
+                                <span className="font-bold ml-1">{Math.round((item.last_score / item.last_total) * 100)}%</span>
                               )}
                             </span>
                             <span className="text-xs text-gray-500 font-medium group-hover:underline">

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import * as studentApi from '@/lib/api/student'
 import apiClient from '@/lib/api/client'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { startExam, submitExamAttempt } from '@/lib/redux/slices/examsSlice'
+import { startExam, submitExamAttempt, fetchLastAttempt } from '@/lib/redux/slices/examsSlice'
 import { markExamAttempted } from '@/lib/redux/slices/coursesSlice'
 
 function formatTime(totalSeconds: number): string {
@@ -112,8 +112,10 @@ export default function StudentExamPage() {
             // Fetch the full review for the past attempt
             setLoadingPastResult(true)
             try {
-              const resp = await apiClient.get(`/api/v1/student/exams/${examId}/last-attempt`)
-              setResult(resp.data)
+              const resAction = await dispatch(fetchLastAttempt(examId))
+              if (fetchLastAttempt.fulfilled.match(resAction)) {
+                setResult(resAction.payload)
+              }
             } finally {
               setLoadingPastResult(false)
             }
@@ -380,9 +382,10 @@ export default function StudentExamPage() {
           <div className="space-y-4 sm:space-y-6">
             <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Exam Result</h1>
+              <p className="text-4xl sm:text-5xl font-extrabold text-teal-600 mb-4">{Math.round((result.marks_obtained / result.total_questions) * 100)}%</p>
               <p className="text-base sm:text-lg text-gray-800 mb-2">Marks Obtained: <span className="font-bold">{result.marks_obtained} / {result.total_questions}</span></p>
               <p className="text-sm sm:text-base text-gray-700 mb-1">Time Taken: {formatTime(result.time_taken_seconds)}</p>
-              <p className="text-sm sm:text-base text-gray-700">Overall Rank ({result.ranking.subject}): <span className="font-semibold">{result.ranking.overall_rank ?? '-'}</span> | District Rank: <span className="font-semibold">{result.ranking.district_rank ?? '-'}</span></p>
+              <p className="text-sm sm:text-base text-gray-700"> {result.ranking.exam_title} | Island Rank: <span className="font-semibold">{result.ranking.overall_rank ?? '-'}</span> | District Rank: <span className="font-semibold">{result.ranking.district_rank ?? '-'}</span></p>
             </div>
 
             <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">

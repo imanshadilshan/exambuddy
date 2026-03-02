@@ -1,5 +1,11 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
-import { login as apiLogin, register as apiRegister, getCurrentUser } from '@/lib/api/auth'
+import { 
+  login as apiLogin, 
+  register as apiRegister, 
+  getCurrentUser,
+  updateProfile as apiUpdateProfile,
+  updateProfilePhoto as apiUpdateProfilePhoto
+} from '@/lib/api/auth'
 import { googleLogin as apiGoogleLogin } from '@/lib/api/googleAuth'
 import apiClient from '@/lib/api/client'
 
@@ -83,6 +89,28 @@ export const changePassword = createAsyncThunk(
       return response.data
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to change password')
+    }
+  }
+)
+
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async (data: any, { rejectWithValue }) => {
+    try {
+      return await apiUpdateProfile(data)
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to update profile')
+    }
+  }
+)
+
+export const updateProfilePhoto = createAsyncThunk(
+  'auth/updateProfilePhoto',
+  async (data: FormData, { rejectWithValue }) => {
+    try {
+      return await apiUpdateProfilePhoto(data)
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to update profile photo')
     }
   }
 )
@@ -202,6 +230,36 @@ const authSlice = createSlice({
         state.needsProfileCompletion = action.payload.needs_profile_completion
       })
       .addCase(googleLoginThunk.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload as string
+      })
+      // Update profile
+      .addCase(updateProfile.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.isLoading = false
+        if (state.user) {
+          state.user = { ...state.user, profile: { ...state.user.profile, ...action.payload } }
+        }
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload as string
+      })
+      // Update profile photo
+      .addCase(updateProfilePhoto.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(updateProfilePhoto.fulfilled, (state, action) => {
+        state.isLoading = false
+        if (state.user) {
+          state.user = { ...state.user, profile: { ...state.user.profile, ...action.payload } }
+        }
+      })
+      .addCase(updateProfilePhoto.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload as string
       })

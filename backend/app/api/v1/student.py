@@ -16,7 +16,7 @@ from app.schemas.exam_engine import (
     StartExamResponse,
     SubmitExamRequest,
     SubmitExamResponse,
-    SubjectRankResponse,
+    ExamRankResponse,
 )
 from app.dependencies import get_current_user, get_optional_user
 from app.core.security import verify_token
@@ -100,90 +100,7 @@ def check_exam_access(
     return service.check_exam_access(exam_id, current_user)
 
 
-def _compute_subject_ranks(db: Session, user_id: UUID, subject: str, district: Optional[str]):
-    from app.models.user import User
-    from app.models.student import Student
-    from app.models.course import Course
-    from app.models.exam import Exam
-    from app.models.exam_attempt import ExamAttempt, ExamAttemptStatus
 
-    # Subquery: get the last (most recent) completed attempt per user per exam
-    last_attempt_sq = (
-        db.query(
-            ExamAttempt.user_id,
-            ExamAttempt.exam_id,
-            func.max(ExamAttempt.submitted_at).label("last_submitted_at"),
-        )
-        .join(Exam, ExamAttempt.exam_id == Exam.id)
-        .join(Course, Exam.course_id == Course.id)
-        .filter(
-            Course.subject == subject,
-            ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
-        )
-        .group_by(ExamAttempt.user_id, ExamAttempt.exam_id)
-        .subquery()
-    )
-
-    # Join back to get marks/time for each last attempt
-    last_attempt_data_sq = (
-        db.query(
-            ExamAttempt.user_id,
-            ExamAttempt.marks_obtained,
-            ExamAttempt.time_taken_seconds,
-        )
-        .join(
-            last_attempt_sq,
-            (ExamAttempt.user_id == last_attempt_sq.c.user_id)
-            & (ExamAttempt.exam_id == last_attempt_sq.c.exam_id)
-            & (ExamAttempt.submitted_at == last_attempt_sq.c.last_submitted_at),
-        )
-        .subquery()
-    )
-
-    rows = (
-        db.query(
-            last_attempt_data_sq.c.user_id.label("user_id"),
-            Student.district.label("district"),
-            func.coalesce(func.sum(last_attempt_data_sq.c.marks_obtained), 0).label("score"),
-            func.coalesce(func.sum(last_attempt_data_sq.c.time_taken_seconds), 0).label("time_taken"),
-        )
-        .join(Student, Student.user_id == last_attempt_data_sq.c.user_id)
-        .group_by(last_attempt_data_sq.c.user_id, Student.district)
-        .order_by(
-            func.coalesce(func.sum(last_attempt_data_sq.c.marks_obtained), 0).desc(),
-            func.coalesce(func.sum(last_attempt_data_sq.c.time_taken_seconds), 0).asc(),
-            last_attempt_data_sq.c.user_id.asc(),
-        )
-        .all()
-    )
-
-    overall_rank = None
-    current_rank = 0
-    prev_key = None
-    for i, row in enumerate(rows, start=1):
-        key = (row.score, row.time_taken)
-        if key != prev_key:
-            current_rank = i
-            prev_key = key
-        if row.user_id == user_id:
-            overall_rank = current_rank
-            break
-
-    district_rank = None
-    if district:
-        district_rows = [r for r in rows if r.district == district]
-        current_rank = 0
-        prev_key = None
-        for i, row in enumerate(district_rows, start=1):
-            key = (row.score, row.time_taken)
-            if key != prev_key:
-                current_rank = i
-                prev_key = key
-            if row.user_id == user_id:
-                district_rank = current_rank
-                break
-
-    return overall_rank, district_rank
 
 
 @router.post("/exams/{exam_id}/start", response_model=StartExamResponse)
@@ -207,45 +124,54 @@ def submit_exam_attempt(
     return service.submit_exam_attempt(attempt_id, payload, current_user)
 
 
-@router.get("/rankings/subject/{subject}", response_model=SubjectRankResponse)
-def get_subject_rankings(
-    subject: str,
+@router.get("/rankings/exam/{exam_id}", response_model=ExamRankResponse)
+def get_exam_rankings(
+    exam_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.models.exam import Exam
     district = current_user.student.district if current_user.student else None
-    overall_rank, district_rank = _compute_subject_ranks(db, current_user.id, subject, district)
+    
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+        
+    service = ExamService(db)
+    overall_rank, district_rank = service._compute_exam_ranks(current_user.id, exam_id, district)
+    
     return {
-        "subject": subject,
+        "exam_id": str(exam.id),
+        "exam_title": exam.title,
+        "course_title": exam.course.title if exam.course else "",
+        "subject": exam.course.subject if exam.course else "",
         "overall_rank": overall_rank,
         "district_rank": district_rank,
     }
 
 
-@router.get("/rankings/subjects")
-def get_ranking_subjects(
+@router.get("/rankings/exams")
+def get_ranking_exams(
     db: Session = Depends(get_db),
 ):
-    """Return distinct subjects that have at least one completed exam attempt."""
+    """Return distinct exams that have at least one completed exam attempt."""
     service = StudentService(db)
-    return service.get_ranking_subjects()
+    return service.get_ranking_exams()
 
 
 @router.get("/rankings/leaderboard")
 def get_rankings_leaderboard(
-    subject: str,
+    exam_id: str,
     limit: int = 50,
     request: Request = None,
     db: Session = Depends(get_db),
 ):
     """
-    Return the leaderboard for a given subject.
-    Aggregates all completed attempts per student (sum score, sum time).
-    Optionally highlights the current user's row.
+    Return the leaderboard for a given exam.
     """
     current_user = get_optional_user(request, db) if request else None
     service = StudentService(db)
-    return service.get_rankings_leaderboard(subject, limit, current_user)
+    return service.get_rankings_leaderboard(exam_id, limit, current_user)
 
 
 @router.get("/my-attempts")
@@ -323,9 +249,12 @@ def get_last_attempt_review(
         })
 
     subject = exam.course.subject if exam and exam.course else ""
+    course_title = exam.course.title if exam and exam.course else ""
+    exam_title = exam.title if exam else ""
     district = current_user.student.district if current_user.student else None
+    
     service = ExamService(db)
-    overall_rank, district_rank = service._compute_subject_ranks(current_user.id, subject, district)
+    overall_rank, district_rank = service._compute_exam_ranks(current_user.id, exam_id, district)
 
     return {
         "attempt_id": str(attempt.id),
@@ -335,8 +264,11 @@ def get_last_attempt_review(
         "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
         "review": review,
         "ranking": {
+            "exam_id": str(exam.id) if exam else "",
+            "exam_title": exam_title,
+            "course_title": course_title,
             "subject": subject,
             "overall_rank": overall_rank,
             "district_rank": district_rank,
-        },
+        }
     }

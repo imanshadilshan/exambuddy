@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { fetchPlatformStats, fetchRankingSubjects, fetchLeaderboard } from '@/lib/redux/slices/studentDashboardSlice'
+import { fetchPlatformStats, fetchRankingExams, fetchLeaderboard } from '@/lib/redux/slices/studentDashboardSlice'
 import type { TopCourse, LeaderboardEntry } from '@/lib/api/student'
 
 // ---------- Animated counter hook ----------
@@ -52,7 +52,7 @@ export default function Home() {
   
   const stats = useAppSelector((state) => state.studentDashboard.platformStats)
   const topPerformers = useAppSelector((state) => state.studentDashboard.leaderboard)
-  const rankingSubjects = useAppSelector((state) => state.studentDashboard.rankingSubjects)
+  const rankingExams = useAppSelector((state) => state.studentDashboard.rankingExams)
 
   const [statsVisible, setStatsVisible] = useState(false)
   const statsRef = useRef<HTMLDivElement>(null)
@@ -61,16 +61,16 @@ export default function Home() {
     if (!stats) {
       dispatch(fetchPlatformStats())
     }
-    if (rankingSubjects.length === 0) {
-      dispatch(fetchRankingSubjects())
+    if (rankingExams.length === 0) {
+      dispatch(fetchRankingExams())
     }
-  }, [dispatch, stats, rankingSubjects.length])
+  }, [dispatch, stats, rankingExams.length])
 
   useEffect(() => {
-    if (rankingSubjects.length > 0 && topPerformers.length === 0) {
-      dispatch(fetchLeaderboard({ subject: rankingSubjects[0], limit: 3 }))
+    if (rankingExams.length > 0 && topPerformers.length === 0) {
+      dispatch(fetchLeaderboard({ exam_id: rankingExams[0].exam_id, limit: 3 }))
     }
-  }, [dispatch, rankingSubjects, topPerformers.length])
+  }, [dispatch, rankingExams, topPerformers.length])
 
   useEffect(() => {
     const el = statsRef.current

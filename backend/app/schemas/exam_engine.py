@@ -53,6 +53,9 @@ class ExamQuestionReview(BaseModel):
 
 
 class RankingInfo(BaseModel):
+    exam_id: str
+    exam_title: str
+    course_title: str
     subject: str
     overall_rank: Optional[int] = None
     district_rank: Optional[int] = None
@@ -67,7 +70,10 @@ class SubmitExamResponse(BaseModel):
     ranking: RankingInfo
 
 
-class SubjectRankResponse(BaseModel):
+class ExamRankResponse(BaseModel):
+    exam_id: str
+    exam_title: str
+    course_title: str
     subject: str
     overall_rank: Optional[int] = None
     district_rank: Optional[int] = None

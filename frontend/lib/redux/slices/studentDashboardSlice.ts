@@ -1,14 +1,14 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import * as studentApi from '@/lib/api/student'
-import { MyEnrollmentsResponse, MyAttemptItem, SubjectRankResponse, LeaderboardEntry, PlatformStats } from '@/lib/api/student'
+import { MyEnrollmentsResponse, MyAttemptItem, ExamRankResponse, LeaderboardEntry, PlatformStats, RankingExam } from '@/lib/api/student'
 
 interface DashboardState {
   enrollments: MyEnrollmentsResponse
   attempts: MyAttemptItem[]
   platformStats: PlatformStats | null
-  rankingSubjects: string[]
+  rankingExams: RankingExam[]
   leaderboard: LeaderboardEntry[]
-  subjectRank: SubjectRankResponse | null
+  examRank: ExamRankResponse | null
   
   // Loading states
   loadingEnrollments: boolean
@@ -24,9 +24,9 @@ const initialState: DashboardState = {
   enrollments: { courses: [], exams: [] },
   attempts: [],
   platformStats: null,
-  rankingSubjects: [],
+  rankingExams: [],
   leaderboard: [],
-  subjectRank: null,
+  examRank: null,
 
   loadingEnrollments: false,
   loadingAttempts: false,
@@ -70,33 +70,33 @@ export const fetchPlatformStats = createAsyncThunk(
 
 export const fetchLeaderboard = createAsyncThunk(
   'dashboard/fetchLeaderboard',
-  async (params: { subject: string; limit?: number }, { rejectWithValue }) => {
+  async (params: { exam_id: string; limit?: number }, { rejectWithValue }) => {
     try {
-      return await studentApi.getRankingsLeaderboard(params.subject, params.limit)
+      return await studentApi.getRankingsLeaderboard(params.exam_id, params.limit)
     } catch (error: any) {
       return rejectWithValue(error?.response?.data?.detail || 'Failed to fetch leaderboard')
     }
   }
 )
 
-export const fetchRankingSubjects = createAsyncThunk(
-  'dashboard/fetchRankingSubjects',
+export const fetchRankingExams = createAsyncThunk(
+  'dashboard/fetchRankingExams',
   async (_, { rejectWithValue }) => {
     try {
-      return await studentApi.getRankingSubjects()
+      return await studentApi.getRankingExams()
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to fetch ranking subjects')
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to fetch ranking exams')
     }
   }
 )
 
-export const fetchSubjectRank = createAsyncThunk(
-  'dashboard/fetchSubjectRank',
-  async (subject: string, { rejectWithValue }) => {
+export const fetchExamRank = createAsyncThunk(
+  'dashboard/fetchExamRank',
+  async (examId: string, { rejectWithValue }) => {
     try {
-      return await studentApi.getSubjectRanking(subject)
+      return await studentApi.getExamRanking(examId)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to fetch subject rank')
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to fetch exam rank')
     }
   }
 )
@@ -163,28 +163,28 @@ const dashboardSlice = createSlice({
         state.loadingRankings = false
         state.error = action.payload as string
       })
-      // Ranking Subjects
-      .addCase(fetchRankingSubjects.pending, (state) => {
+      // Ranking Exams
+      .addCase(fetchRankingExams.pending, (state) => {
         state.loadingRankings = true
         state.error = null
       })
-      .addCase(fetchRankingSubjects.fulfilled, (state, action: PayloadAction<string[]>) => {
+      .addCase(fetchRankingExams.fulfilled, (state, action: PayloadAction<RankingExam[]>) => {
         state.loadingRankings = false
-        state.rankingSubjects = action.payload
+        state.rankingExams = action.payload
       })
-      .addCase(fetchRankingSubjects.rejected, (state, action) => {
+      .addCase(fetchRankingExams.rejected, (state, action) => {
         state.loadingRankings = false
         state.error = action.payload as string
       })
-      // Subject Rank
-      .addCase(fetchSubjectRank.pending, (state) => {
+      // Exam Rank
+      .addCase(fetchExamRank.pending, (state) => {
         state.loadingRankings = true
       })
-      .addCase(fetchSubjectRank.fulfilled, (state, action: PayloadAction<SubjectRankResponse>) => {
+      .addCase(fetchExamRank.fulfilled, (state, action: PayloadAction<ExamRankResponse>) => {
         state.loadingRankings = false
-        state.subjectRank = action.payload
+        state.examRank = action.payload
       })
-      .addCase(fetchSubjectRank.rejected, (state, action) => {
+      .addCase(fetchExamRank.rejected, (state, action) => {
         state.loadingRankings = false
         state.error = action.payload as string
       })

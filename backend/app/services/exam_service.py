@@ -277,37 +277,23 @@ class ExamService:
             "questions": payload_questions,
         }
 
-    def _compute_subject_ranks(self, user_id: UUID, subject: str, district: Optional[str]):
-        """Helper to get ranks (re-using the query logic internally)"""
-        if not subject:
+    def _compute_exam_ranks(self, user_id: UUID, exam_id: UUID, district: Optional[str]):
+        """Helper to get ranks for a specific exam"""
+        if not exam_id:
             return 0, 0
 
-        # Subquery: get best (max) marks per user per exam in this subject
+        # Subquery: get best (max) marks per user for this specific exam
         best_attempts_sq = (
             self.db.query(
                 ExamAttempt.user_id,
-                ExamAttempt.exam_id,
                 func.max(ExamAttempt.marks_obtained).label('max_marks'),
                 func.min(ExamAttempt.time_taken_seconds).label('min_time')
             )
-            .join(Exam, ExamAttempt.exam_id == Exam.id)
-            .join(Course, Exam.course_id == Course.id)
             .filter(
-                Course.subject == subject,
+                ExamAttempt.exam_id == exam_id,
                 ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT])
             )
-            .group_by(ExamAttempt.user_id, ExamAttempt.exam_id)
-            .subquery()
-        )
-
-        # Aggregate total marks and total time per user for this subject
-        user_scores = (
-            self.db.query(
-                best_attempts_sq.c.user_id,
-                func.sum(best_attempts_sq.c.max_marks).label('total_marks'),
-                func.sum(best_attempts_sq.c.min_time).label('total_time')
-            )
-            .group_by(best_attempts_sq.c.user_id)
+            .group_by(ExamAttempt.user_id)
             .subquery()
         )
 
@@ -316,23 +302,23 @@ class ExamService:
         # Calculate ranks
         rankings = (
             self.db.query(
-                user_scores.c.user_id,
+                best_attempts_sq.c.user_id,
                 Student.district,
                 func.rank().over(
                     order_by=[
-                        user_scores.c.total_marks.desc(),
-                        user_scores.c.total_time.asc()
+                        best_attempts_sq.c.max_marks.desc(),
+                        best_attempts_sq.c.min_time.asc()
                     ]
                 ).label('overall_rank'),
                 func.rank().over(
                     partition_by=Student.district,
                     order_by=[
-                        user_scores.c.total_marks.desc(),
-                        user_scores.c.total_time.asc()
+                        best_attempts_sq.c.max_marks.desc(),
+                        best_attempts_sq.c.min_time.asc()
                     ]
                 ).label('district_rank')
             )
-            .join(Student, Student.user_id == user_scores.c.user_id)
+            .join(Student, Student.user_id == best_attempts_sq.c.user_id)
             .subquery()
         )
 
@@ -433,7 +419,9 @@ class ExamService:
 
         district = current_user.student.district if current_user.student else None
         subject = exam.course.subject if exam.course else ""
-        overall_rank, district_rank = self._compute_subject_ranks(current_user.id, subject, district)
+        course_title = exam.course.title if exam.course else ""
+        exam_title = exam.title
+        overall_rank, district_rank = self._compute_exam_ranks(current_user.id, exam.id, district)
 
         return {
             "attempt_id": attempt.id,
@@ -442,6 +430,9 @@ class ExamService:
             "time_taken_seconds": final_time_taken,
             "review": review,
             "ranking": {
+                "exam_id": str(exam.id),
+                "exam_title": exam_title,
+                "course_title": course_title,
                 "subject": subject,
                 "overall_rank": overall_rank,
                 "district_rank": district_rank,
@@ -466,21 +457,26 @@ class ExamService:
         district = current_user.student.district if current_user.student else None
         response = []
         
-        # Cache subject rankings per request to prevent redundant O(N) database loads 
-        subject_ranks_cache = {}
+        # Cache exam rankings per request to prevent redundant O(N) database loads 
+        exam_ranks_cache = {}
         
         for attempt in attempts:
-            subject = attempt.exam.course.subject if attempt.exam and attempt.exam.course else ""
+            exam_id_str = str(attempt.exam_id)
             
-            if subject and subject not in subject_ranks_cache:
-                subject_ranks_cache[subject] = self._compute_subject_ranks(current_user.id, subject, district)
+            if exam_id_str not in exam_ranks_cache:
+                exam_ranks_cache[exam_id_str] = self._compute_exam_ranks(current_user.id, attempt.exam_id, district)
                 
-            overall_rank, district_rank = subject_ranks_cache.get(subject, (0, 0))
+            overall_rank, district_rank = exam_ranks_cache.get(exam_id_str, (0, 0))
             
+            subject = attempt.exam.course.subject if attempt.exam and attempt.exam.course else ""
+            course_title = attempt.exam.course.title if attempt.exam and attempt.exam.course else ""
+            exam_title = attempt.exam.title if attempt.exam else ""
+
             response.append({
                 "attempt_id": str(attempt.id),
                 "exam_id": str(attempt.exam_id),
-                "exam_title": attempt.exam.title if attempt.exam else "",
+                "exam_title": exam_title,
+                "course_title": course_title,
                 "subject": subject,
                 "marks_obtained": attempt.marks_obtained,
                 "total_questions": attempt.total_questions,

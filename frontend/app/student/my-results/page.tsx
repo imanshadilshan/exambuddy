@@ -109,9 +109,8 @@ export default function MyResultsPage() {
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Exam</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Subject</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">%</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time Taken</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Overall Rank</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Time Taken</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Island Rank</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">District Rank</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
                   </tr>
@@ -134,9 +133,6 @@ export default function MyResultsPage() {
                           <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-medium">
                             {a.subject}
                           </span>
-                        </td>
-                        <td className="px-4 py-4 text-center font-semibold text-gray-900">
-                          {a.marks_obtained ?? 0}/{a.total_questions ?? 0}
                         </td>
                         <td className="px-4 py-4 text-center">
                           <span className={`px-2 py-0.5 rounded border text-xs font-semibold ${scoreColor(pct)}`}>

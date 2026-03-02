@@ -4,10 +4,9 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
+import { fetchCurrentUser, updateProfile, updateProfilePhoto } from '@/lib/redux/slices/authSlice'
 import { fetchMyEnrollments } from '@/lib/redux/slices/studentDashboardSlice'
 import { getInitials } from '@/lib/utils/initials'
-import apiClient from '@/lib/api/client'
 
 const DISTRICTS = [
   'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
@@ -75,13 +74,17 @@ export default function ProfilePage() {
     setSaveError('')
     setSaveSuccess(false)
     try {
-      await apiClient.put('/api/v1/auth/profile', form)
-      await dispatch(fetchCurrentUser())
-      setIsEditing(false)
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
+      const resAction = await dispatch(updateProfile(form))
+      if (updateProfile.fulfilled.match(resAction)) {
+        await dispatch(fetchCurrentUser())
+        setIsEditing(false)
+        setSaveSuccess(true)
+        setTimeout(() => setSaveSuccess(false), 3000)
+      } else {
+        setSaveError(resAction.payload as string || 'Failed to save changes. Please try again.')
+      }
     } catch (err: any) {
-      setSaveError(err?.response?.data?.detail || 'Failed to save changes. Please try again.')
+      setSaveError(err?.message || 'Failed to save changes. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -113,12 +116,14 @@ export default function ProfilePage() {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      await apiClient.post('/api/v1/auth/profile-photo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      await dispatch(fetchCurrentUser())
+      const resAction = await dispatch(updateProfilePhoto(formData))
+      if (updateProfilePhoto.fulfilled.match(resAction)) {
+        await dispatch(fetchCurrentUser())
+      } else {
+        setSaveError(resAction.payload as string || 'Photo upload failed.')
+      }
     } catch (err: any) {
-      setSaveError(err?.response?.data?.detail || 'Photo upload failed.')
+      setSaveError(err?.message || 'Photo upload failed.')
     } finally {
       setUploadingPhoto(false)
       if (fileInputRef.current) fileInputRef.current.value = ''

@@ -120,13 +120,19 @@ export interface SubmitExamResponse {
     is_correct: boolean
   }>
   ranking: {
+    exam_id: string
+    exam_title: string
+    course_title: string
     subject: string
     overall_rank: number | null
     district_rank: number | null
   }
 }
 
-export interface SubjectRankResponse {
+export interface ExamRankResponse {
+  exam_id: string
+  exam_title: string
+  course_title: string
   subject: string
   overall_rank: number | null
   district_rank: number | null
@@ -197,6 +203,7 @@ export const submitExamAttempt = async (
 
 export interface LeaderboardEntry {
   rank: number
+  district_rank: number
   full_name: string
   school: string
   district: string
@@ -207,8 +214,8 @@ export interface LeaderboardEntry {
   is_current_user: boolean
 }
 
-export const getSubjectRanking = async (subject: string): Promise<SubjectRankResponse> => {
-  const response = await apiClient.get(`/api/v1/student/rankings/subject/${encodeURIComponent(subject)}`)
+export const getExamRanking = async (examId: string): Promise<ExamRankResponse> => {
+  const response = await apiClient.get(`/api/v1/student/rankings/exam/${examId}`)
   return response.data
 }
 
@@ -219,15 +226,27 @@ export const getMyAttempts = async (limit = 10): Promise<MyAttemptItem[]> => {
   return response.data
 }
 
-export const getRankingSubjects = async (): Promise<string[]> => {
-  const response = await apiClient.get('/api/v1/student/rankings/subjects')
+export interface RankingExam {
+  exam_id: string
+  exam_title: string
+  course_title: string
+  subject: string
+}
+
+export const getRankingExams = async (): Promise<RankingExam[]> => {
+  const response = await apiClient.get('/api/v1/student/rankings/exams')
   return response.data
 }
 
-export const getRankingsLeaderboard = async (subject: string, limit = 50): Promise<LeaderboardEntry[]> => {
+export const getRankingsLeaderboard = async (exam_id: string, limit = 50): Promise<LeaderboardEntry[]> => {
   const response = await apiClient.get('/api/v1/student/rankings/leaderboard', {
-    params: { subject, limit },
+    params: { exam_id, limit },
   })
+  return response.data
+}
+
+export const getLastAttempt = async (examId: string) => {
+  const response = await apiClient.get(`/api/v1/student/exams/${examId}/last-attempt`)
   return response.data
 }
 

@@ -203,7 +203,7 @@ export default function DashboardPage() {
               {attempts.slice(0, 3).map((a) => (
                 <div key={a.attempt_id} className="p-3 border border-gray-200 rounded-lg">
                   <p className="font-medium text-gray-900">{a.subject}</p>
-                  <p className="text-sm text-gray-600">Overall Rank: {a.overall_rank ?? '-'} • District Rank: {a.district_rank ?? '-'}</p>
+                  <p className="text-sm text-gray-600">Island Rank: {a.overall_rank ?? '-'} • District Rank: {a.district_rank ?? '-'}</p>
                 </div>
               ))}
             </div>
@@ -229,11 +229,13 @@ export default function DashboardPage() {
                 <div key={a.attempt_id} className="p-4 border border-gray-200 rounded-lg flex items-center justify-between gap-4">
                   <div>
                     <p className="font-medium text-gray-900">{a.exam_title}</p>
-                    <p className="text-sm text-gray-600">{a.subject} • Score: {a.marks_obtained ?? 0}/{a.total_questions ?? 0} • Time: {a.time_taken_seconds ?? 0}s</p>
+                    <p className="text-sm text-gray-600">
+                      {a.subject} • Score: {a.total_questions ? Math.round(((a.marks_obtained ?? 0) / (a.total_questions ?? 1)) * 100) : 0}% • Time: {a.time_taken_seconds ?? 0}s
+                    </p>
                   </div>
                   <div className="text-right text-sm text-gray-600">
-                    <p>Overall: {a.overall_rank ?? '-'}</p>
-                    <p>District: {a.district_rank ?? '-'}</p>
+                    <p>Island Rank: {a.overall_rank ?? '-'}</p>
+                    <p>District Rank: {a.district_rank ?? '-'}</p>
                   </div>
                 </div>
               ))}

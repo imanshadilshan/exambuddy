@@ -131,99 +131,101 @@ class StudentService:
             "enrollment_id": str(enrollment.id)
         }
 
-    def get_ranking_subjects(self) -> List[str]:
+    def get_ranking_exams(self) -> List[dict]:
         rows = (
-            self.db.query(Course.subject)
-            .join(Exam, Exam.course_id == Course.id)
+            self.db.query(Exam.id, Exam.title, Course.title.label("course_title"), Course.subject)
+            .join(Course, Exam.course_id == Course.id)
             .join(ExamAttempt, ExamAttempt.exam_id == Exam.id)
             .filter(
                 ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
             )
             .distinct()
-            .order_by(Course.subject.asc())
+            .order_by(Course.subject.asc(), Course.title.asc(), Exam.title.asc())
             .all()
         )
-        return [row.subject for row in rows]
+        return [
+            {
+                "exam_id": str(r.id),
+                "exam_title": r.title,
+                "course_title": r.course_title,
+                "subject": r.subject,
+            }
+            for r in rows
+        ]
 
-    def get_rankings_leaderboard(self, subject: str, limit: int, current_user: Optional[User]) -> List[dict]:
-        # Subquery: last completed attempt per user per exam in this subject
-        last_attempt_sq = (
+    def get_rankings_leaderboard(self, exam_id: str, limit: int, current_user: Optional[User]) -> List[dict]:
+        # Subquery 1: get best attempt per user for THIS exact exam
+        best_attempts_sq = (
             self.db.query(
                 ExamAttempt.user_id,
                 ExamAttempt.exam_id,
-                func.max(ExamAttempt.submitted_at).label("last_submitted_at"),
+                func.max(ExamAttempt.marks_obtained).label('max_marks'),
+                func.min(ExamAttempt.time_taken_seconds).label('min_time')
             )
-            .join(Exam, ExamAttempt.exam_id == Exam.id)
-            .join(Course, Exam.course_id == Course.id)
             .filter(
-                Course.subject == subject,
-                ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
+                ExamAttempt.exam_id == exam_id,
+                ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT])
             )
             .group_by(ExamAttempt.user_id, ExamAttempt.exam_id)
             .subquery()
         )
 
-        # Join to get marks/time for those last attempts
-        last_attempt_data_sq = (
-            self.db.query(
-                ExamAttempt.user_id,
-                ExamAttempt.marks_obtained,
-                ExamAttempt.time_taken_seconds,
-            )
-            .join(
-                last_attempt_sq,
-                (ExamAttempt.user_id == last_attempt_sq.c.user_id)
-                & (ExamAttempt.exam_id == last_attempt_sq.c.exam_id)
-                & (ExamAttempt.submitted_at == last_attempt_sq.c.last_submitted_at),
-            )
-            .subquery()
-        )
+        from app.models.student import Student
 
-        rows = (
+        # Subquery 2: compute ranks before applying limits
+        ranked_sq = (
             self.db.query(
-                last_attempt_data_sq.c.user_id.label("user_id"),
-                Student.full_name.label("full_name"),
-                Student.school.label("school"),
-                Student.district.label("district"),
-                Student.grade.label("grade"),
-                func.coalesce(func.sum(last_attempt_data_sq.c.marks_obtained), 0).label("score"),
-                func.coalesce(func.sum(last_attempt_data_sq.c.time_taken_seconds), 0).label("time_taken"),
-                func.count(last_attempt_data_sq.c.user_id).label("attempts"),
-            )
-            .join(Student, Student.user_id == last_attempt_data_sq.c.user_id)
-            .group_by(
-                last_attempt_data_sq.c.user_id,
+                best_attempts_sq.c.user_id,
+                best_attempts_sq.c.max_marks.label("score"),
+                best_attempts_sq.c.min_time.label("time_taken"),
                 Student.full_name,
                 Student.school,
                 Student.district,
                 Student.grade,
+                Exam.total_questions,
+                func.rank().over(
+                    order_by=[
+                        best_attempts_sq.c.max_marks.desc(),
+                        best_attempts_sq.c.min_time.asc()
+                    ]
+                ).label("island_rank"),
+                func.rank().over(
+                    partition_by=Student.district,
+                    order_by=[
+                        best_attempts_sq.c.max_marks.desc(),
+                        best_attempts_sq.c.min_time.asc()
+                    ]
+                ).label("district_rank")
             )
-            .order_by(
-                func.coalesce(func.sum(last_attempt_data_sq.c.marks_obtained), 0).desc(),
-                func.coalesce(func.sum(last_attempt_data_sq.c.time_taken_seconds), 0).asc(),
-            )
+            .join(Student, Student.user_id == best_attempts_sq.c.user_id)
+            .join(Exam, Exam.id == best_attempts_sq.c.exam_id)
+            .subquery()
+        )
+
+        rows = (
+            self.db.query(ranked_sq)
+            .order_by(ranked_sq.c.island_rank.asc())
             .limit(max(1, min(limit, 200)))
             .all()
         )
 
         result = []
-        current_rank = 0
-        prev_key = None
-        for i, row in enumerate(rows, start=1):
-            key = (row.score, row.time_taken)
-            if key != prev_key:
-                current_rank = i
-                prev_key = key
-
+        for row in rows:
+            # compute score as percentage strictly out of 100
+            pct = 0
+            if row.total_questions and row.total_questions > 0:
+                pct = round((row.score / row.total_questions) * 100)
+                
             result.append({
-                "rank": current_rank,
+                "rank": row.island_rank,
+                "district_rank": row.district_rank,
                 "full_name": row.full_name,
                 "school": row.school,
                 "district": row.district,
                 "grade": row.grade,
-                "score": row.score,
+                "score": pct,
                 "time_taken_seconds": row.time_taken,
-                "attempts": row.attempts,
+                "attempts": 1,
                 "is_current_user": (current_user is not None and str(row.user_id) == str(current_user.id)),
             })
 

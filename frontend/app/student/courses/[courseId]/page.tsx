@@ -252,9 +252,9 @@ function ExamCard({ exam, onEnroll, onPurchase, onStart, enrolling }: ExamCardPr
               <div className="space-y-2">
                 <div className="bg-gray-100 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
                   <span>✓ Completed</span>
-                  {exam.last_score !== null && exam.last_total !== null && (
+                  {exam.last_score !== null && exam.last_total !== null && exam.last_total > 0 && (
                     <span className="ml-auto font-semibold">
-                      {exam.last_score}/{exam.last_total}
+                      {Math.round((exam.last_score / exam.last_total) * 100)}%
                     </span>
                   )}
                 </div>

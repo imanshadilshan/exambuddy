@@ -41,3 +41,15 @@ export const logout = async () => {
   const response = await apiClient.post('/api/v1/auth/logout')
   return response.data
 }
+
+export const updateProfile = async (data: any) => {
+  const response = await apiClient.put('/api/v1/auth/profile', data)
+  return response.data
+}
+
+export const updateProfilePhoto = async (data: FormData) => {
+  const response = await apiClient.post('/api/v1/auth/profile-photo', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}

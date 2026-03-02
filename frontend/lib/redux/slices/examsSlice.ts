@@ -21,6 +21,7 @@ interface ExamsState {
 
   // Student stats
   currentAttempt: studentApi.StartExamResponse | null
+  lastAttempt: any | null
   studentLoading: boolean
   studentError: string | null
 }
@@ -31,6 +32,7 @@ const initialState: ExamsState = {
   error: null,
   
   currentAttempt: null,
+  lastAttempt: null,
   studentLoading: false,
   studentError: null
 }
@@ -108,6 +110,17 @@ export const submitExamAttempt = createAsyncThunk(
       return resp
     } catch (error: any) {
       return rejectWithValue(error?.response?.data?.detail || 'Failed to submit exam attempt')
+    }
+  }
+)
+
+export const fetchLastAttempt = createAsyncThunk(
+  'exams/fetchLastAttempt',
+  async (examId: string, { rejectWithValue }) => {
+    try {
+      return await studentApi.getLastAttempt(examId)
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to fetch last attempt')
     }
   }
 )
@@ -201,6 +214,18 @@ const examsSlice = createSlice({
         // DO NOT clear currentAttempt here; the result page needs it for review mapping
       })
       .addCase(submitExamAttempt.rejected, (state, action) => {
+        state.studentLoading = false
+        state.studentError = action.payload as string
+      })
+      .addCase(fetchLastAttempt.pending, (state) => {
+        state.studentLoading = true
+        state.studentError = null
+      })
+      .addCase(fetchLastAttempt.fulfilled, (state, action) => {
+        state.studentLoading = false
+        state.lastAttempt = action.payload
+      })
+      .addCase(fetchLastAttempt.rejected, (state, action) => {
         state.studentLoading = false
         state.studentError = action.payload as string
       })

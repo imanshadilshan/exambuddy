@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { fetchRankingSubjects, fetchLeaderboard, fetchSubjectRank } from '@/lib/redux/slices/studentDashboardSlice'
+import { fetchRankingExams, fetchLeaderboard, fetchExamRank } from '@/lib/redux/slices/studentDashboardSlice'
 
 function medalColor(rank: number) {
   if (rank === 1) return 'text-yellow-500'
@@ -17,9 +17,12 @@ function medalColor(rank: number) {
 function medalIcon(rank: number) {
   if (rank <= 3) {
     return (
-      <svg className={`w-5 h-5 ${medalColor(rank)}`} viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-      </svg>
+      <div className="flex items-center gap-1.5 font-bold">
+        <svg className={`w-5 h-5 ${medalColor(rank)} flex-shrink-0`} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+        </svg>
+        <span className={medalColor(rank)}>#{rank}</span>
+      </div>
     )
   }
   return <span className="text-sm font-bold text-gray-500">#{rank}</span>
@@ -53,48 +56,50 @@ function RankingsContent() {
   
   const { isAuthenticated } = useAppSelector((state) => state.auth)
   const { 
-    rankingSubjects: subjects, 
+    rankingExams: exams, 
     leaderboard, 
-    subjectRank: myRank,
+    examRank: myRank,
     loadingRankings: loadingBoard 
   } = useAppSelector((state) => state.studentDashboard)
 
-  const [activeSubject, setActiveSubject] = useState<string>('')
+  const [activeExamId, setActiveExamId] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
-  // Load subjects on mount
+  // Load exams on mount
   useEffect(() => {
-    const initSubjects = async () => {
-      if (subjects.length === 0) {
-        await dispatch(fetchRankingSubjects())
+    const initExams = async () => {
+      if (exams.length === 0) {
+        await dispatch(fetchRankingExams())
       }
       setLoading(false)
     }
-    initSubjects()
-  }, [dispatch, subjects.length])
+    initExams()
+  }, [dispatch, exams.length])
 
-  // Set initial active subject
+  // Set initial active exam
   useEffect(() => {
-    if (subjects.length > 0 && !activeSubject) {
-      const initial = searchParams.get('subject') || subjects[0] || ''
-      setActiveSubject(initial)
+    if (exams.length > 0 && !activeExamId) {
+      const initial = searchParams.get('exam') || exams[0]?.exam_id || ''
+      setActiveExamId(initial)
     }
-  }, [subjects, activeSubject, searchParams])
+  }, [exams, activeExamId, searchParams])
 
-  // Load leaderboard when subject changes
+  // Load leaderboard when exam changes
   useEffect(() => {
-    if (!activeSubject) return
+    if (!activeExamId) return
     
-    dispatch(fetchLeaderboard({ subject: activeSubject, limit: 50 }))
+    dispatch(fetchLeaderboard({ exam_id: activeExamId, limit: 50 }))
     if (isAuthenticated) {
-      dispatch(fetchSubjectRank(activeSubject))
+      dispatch(fetchExamRank(activeExamId))
     }
-  }, [dispatch, activeSubject, isAuthenticated])
+  }, [dispatch, activeExamId, isAuthenticated])
 
-  const handleSubject = (sub: string) => {
-    setActiveSubject(sub)
-    router.replace(`/student/rankings?subject=${encodeURIComponent(sub)}`, { scroll: false })
+  const handleExam = (id: string) => {
+    setActiveExamId(id)
+    router.replace(`/student/rankings?exam=${id}`, { scroll: false })
   }
+
+  const activeExamDetails = exams.find(e => e.exam_id === activeExamId)
 
   if (loading) {
     return (
@@ -115,7 +120,7 @@ function RankingsContent() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Rankings</h1>
-            <p className="text-gray-500 mt-1">Top students by subject — ranked by total score, then fastest time</p>
+            <p className="text-gray-500 mt-1">Top students by specific exam — ranked by score, then fastest time</p>
           </div>
           <Link
             href="/dashboard"
@@ -125,7 +130,7 @@ function RankingsContent() {
           </Link>
         </div>
 
-        {subjects.length === 0 ? (
+        {exams.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-16 text-center shadow-sm">
             <div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -140,44 +145,51 @@ function RankingsContent() {
           </div>
         ) : (
           <>
-            {/* Subject Tabs */}
-            <div className="flex gap-2 flex-wrap mb-6">
-              {subjects.map((sub) => (
-                <button
-                  key={sub}
-                  onClick={() => handleSubject(sub)}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                    activeSubject === sub
-                      ? 'bg-teal-600 text-white shadow-sm'
-                      : 'bg-white border border-gray-200 text-gray-700 hover:border-teal-300 hover:text-teal-700'
-                  }`}
-                >
-                  {sub}
-                </button>
-              ))}
+            {/* Exam Selector */}
+            <div className="mb-6 max-w-xl">
+              <label htmlFor="exam-select" className="block text-sm font-medium text-gray-700 mb-2">
+                Select Exam Leaderboard
+              </label>
+              <select
+                id="exam-select"
+                value={activeExamId}
+                onChange={(e) => handleExam(e.target.value)}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2.5 border bg-white"
+              >
+                {exams.map((ex) => (
+                  <option key={ex.exam_id} value={ex.exam_id}>
+                    [{ex.subject}] {ex.course_title} - {ex.exam_title}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* My Rank Banner (only when logged in and found) */}
             {isAuthenticated && myRank && (
               <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-6 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                  <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0">
                     #{myRank.overall_rank}
                   </div>
                   <div>
-                    <p className="font-semibold text-teal-900">Your ranking in {activeSubject}</p>
+                    <p className="font-semibold text-teal-900">Your ranking for <span className="text-teal-700">{activeExamDetails?.exam_title}</span></p>
                   </div>
                 </div>
-                <span className="text-sm font-medium text-teal-600 bg-teal-100 px-3 py-1 rounded-full">
-                  District Ranked: #{myRank.district_rank || '—'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-teal-600 bg-teal-100 px-3 py-1 rounded-full border border-teal-200">
+                    Island Rank: #{myRank.overall_rank}
+                  </span>
+                  <span className="text-sm font-medium text-teal-600 bg-teal-100 px-3 py-1 rounded-full border border-teal-200">
+                    District Rank: #{myRank.district_rank || '—'}
+                  </span>
+                </div>
               </div>
             )}
 
             {/* Leaderboard Table */}
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mt-4">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h2 className="font-bold text-gray-900 text-lg">{activeSubject} — Top Students</h2>
+                <h2 className="font-bold text-gray-900 text-lg">{activeExamDetails?.exam_title || 'Exam'} Leaderboard</h2>
                 {loadingBoard && (
                   <div className="w-5 h-5 border-2 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
                 )}
@@ -186,20 +198,20 @@ function RankingsContent() {
               {loadingBoard ? (
                 <div className="py-16 text-center text-gray-400">Loading leaderboard...</div>
               ) : leaderboard.length === 0 ? (
-                <div className="py-16 text-center text-gray-400">No data for this subject yet</div>
+                <div className="py-16 text-center text-gray-400">No data for this exam yet</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-100">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-16">Rank</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-16">Island Rank</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-20">District Rank</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">School</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">District</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Attempts</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -218,6 +230,9 @@ function RankingsContent() {
                             <div className="flex items-center justify-center w-8">
                               {medalIcon(entry.rank)}
                             </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center">
+                            <span className="font-semibold text-gray-600">#{entry.district_rank}</span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
@@ -245,9 +260,8 @@ function RankingsContent() {
                               G{entry.grade}
                             </span>
                           </td>
-                          <td className="px-4 py-4 text-right font-semibold text-gray-900">{entry.score}</td>
+                          <td className="px-4 py-4 text-right font-semibold text-gray-900">{entry.score}%</td>
                           <td className="px-4 py-4 text-right text-gray-500 whitespace-nowrap">{formatTime(entry.time_taken_seconds)}</td>
-                          <td className="px-4 py-4 text-center text-gray-500">{entry.attempts}</td>
                         </tr>
                       ))}
                     </tbody>
