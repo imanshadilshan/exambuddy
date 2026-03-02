@@ -42,10 +42,22 @@ export default function StudentExamPage() {
   useEffect(() => {
     if (!examData || result) return
 
+    const resetExamState = () => {
+      // Clear all answers
+      setAnswers((prev) => {
+        const cleared: Record<string, string | null> = {}
+        Object.keys(prev).forEach((k) => (cleared[k] = null))
+        return cleared
+      })
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setIsPageVisible(false)
         setVisibilityWarnings((prev) => prev + 1)
+        resetExamState()
       } else {
         setIsPageVisible(true)
       }
@@ -59,8 +71,9 @@ export default function StudentExamPage() {
         (e.metaKey && e.key === 'p') // Print
       ) {
         e.preventDefault()
-        alert('Screenshots and screen recordings are not allowed during the exam!')
+        alert('Screenshots and screen recordings are not allowed! Your progress has been reset as a penalty.')
         setVisibilityWarnings((prev) => prev + 1)
+        resetExamState()
       }
     }
 
@@ -116,32 +129,10 @@ export default function StudentExamPage() {
     }
   }, [examId])
 
+  const answersRef = useRef(answers)
   useEffect(() => {
-    if (!examData || result) return
-
-    const interval = setInterval(() => {
-      const end = new Date(examData.ends_at).getTime()
-      const now = Date.now()
-      const seconds = Math.max(0, Math.floor((end - now) / 1000))
-      setTimeLeft(seconds)
-
-      if (seconds === 0 && !autoSubmitTriggered.current) {
-        autoSubmitTriggered.current = true
-        handleSubmit(true)
-      }
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [examData, result])
-
-  const unansweredCount = useMemo(() => {
-    if (!examData) return 0
-    return examData.questions.filter((q) => !answers[q.id]).length
-  }, [answers, examData])
-
-  const handleSelect = (questionId: string, optionId: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: optionId }))
-  }
+    answersRef.current = answers
+  }, [answers])
 
   const handleSubmit = async (auto = false) => {
     if (!examData || submitting || result) return
@@ -152,7 +143,7 @@ export default function StudentExamPage() {
       const payload: studentApi.SubmitExamRequest = {
         answers: examData.questions.map((q) => ({
           question_id: q.id,
-          selected_option_id: answers[q.id] || null,
+          selected_option_id: answersRef.current[q.id] || null,
         })),
       }
 
@@ -173,6 +164,34 @@ export default function StudentExamPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  useEffect(() => {
+    if (!examData || result) return
+
+    const interval = setInterval(() => {
+      const end = new Date(examData.ends_at).getTime()
+      const now = Date.now()
+      const seconds = Math.max(0, Math.floor((end - now) / 1000))
+      setTimeLeft(seconds)
+
+      if (seconds === 0 && !autoSubmitTriggered.current) {
+        autoSubmitTriggered.current = true
+        clearInterval(interval)
+        handleSubmit(true)
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [examData, result])
+
+  const unansweredCount = useMemo(() => {
+    if (!examData) return 0
+    return examData.questions.filter((q) => !answers[q.id]).length
+  }, [answers, examData])
+
+  const handleSelect = (questionId: string, optionId: string) => {
+    setAnswers((prev) => ({ ...prev, [questionId]: optionId }))
   }
 
   const getOptionForQuestion = (questionId: string, optionId: string | null) => {
@@ -249,20 +268,18 @@ export default function StudentExamPage() {
 
       {/* Blur overlay when page is hidden */}
       {!isPageVisible && !result && (
-        <div className="fixed inset-0 bg-black/80 z-40 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center">
           <div className="bg-white rounded-lg p-8 text-center max-w-md">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Warning!</h2>
-            <p className="text-gray-800 mb-2">
-              Switching tabs or apps during the exam is not allowed.
+            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Violation Detected!</h2>
+            <p className="text-gray-800 mb-4 font-semibold text-lg">
+              You left the exam tab. Your answers have been reset to the beginning.
             </p>
-            <p className="text-sm text-gray-600">
-              Warnings: {visibilityWarnings}/3
+            <p className="text-gray-600 mb-2">
+              The timer has continued to count down. Please focus on the exam window.
             </p>
-            {visibilityWarnings >= 3 && (
-              <p className="text-red-600 font-semibold mt-2">
-                Multiple violations detected. This may affect your result.
-              </p>
-            )}
+            <p className="text-sm font-bold text-red-500 bg-red-50 py-2 rounded">
+              Warnings: {visibilityWarnings}
+            </p>
           </div>
         </div>
       )}
