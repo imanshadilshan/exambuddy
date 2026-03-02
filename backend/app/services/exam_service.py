@@ -39,6 +39,7 @@ class ExamService:
             description=payload.description,
             duration_minutes=payload.duration_minutes,
             total_questions=payload.total_questions,
+            price=payload.price,
             is_published=False,
         )
         self.db.add(exam)
@@ -91,12 +92,32 @@ class ExamService:
         result = []
         for exam in exams:
             exam_enrollment = None
+            already_attempted = False
+            last_score = None
+            last_total = None
+
             if current_user:
                 exam_enrollment = self.db.query(ExamEnrollment).filter(
                     ExamEnrollment.user_id == current_user.id,
                     ExamEnrollment.exam_id == exam.id,
                     ExamEnrollment.status == EnrollmentStatus.ACTIVE
                 ).first()
+
+                # Check for a completed attempt
+                last_attempt = (
+                    self.db.query(ExamAttempt)
+                    .filter(
+                        ExamAttempt.user_id == current_user.id,
+                        ExamAttempt.exam_id == exam.id,
+                        ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
+                    )
+                    .order_by(ExamAttempt.submitted_at.desc())
+                    .first()
+                )
+                if last_attempt:
+                    already_attempted = True
+                    last_score = last_attempt.marks_obtained
+                    last_total = last_attempt.total_questions
 
             result.append({
                 "id": str(exam.id),
@@ -108,7 +129,10 @@ class ExamService:
                 "price": exam.price,
                 "is_free": exam.price == 0,
                 "is_enrolled": has_course_access or exam_enrollment is not None,
-                "enrollment_type": "course" if has_course_access else ("exam" if exam_enrollment else None)
+                "enrollment_type": "course" if has_course_access else ("exam" if exam_enrollment else None),
+                "already_attempted": already_attempted,
+                "last_score": last_score,
+                "last_total": last_total,
             })
 
         return result
@@ -162,6 +186,26 @@ class ExamService:
 
         if not course_enrollment and not exam_enrollment:
             raise HTTPException(status_code=403, detail="You must enroll in this exam first")
+
+        # ── One-attempt enforcement ────────────────────────────────────
+        completed_attempt = self.db.query(ExamAttempt).filter(
+            ExamAttempt.user_id == current_user.id,
+            ExamAttempt.exam_id == exam.id,
+            ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
+        ).first()
+
+        if completed_attempt:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "already_attempted": True,
+                    "marks_obtained": completed_attempt.marks_obtained,
+                    "total_questions": completed_attempt.total_questions,
+                    "time_taken_seconds": completed_attempt.time_taken_seconds,
+                    "submitted_at": completed_attempt.submitted_at.isoformat() if completed_attempt.submitted_at else None,
+                }
+            )
+        # ──────────────────────────────────────────────────────────────
 
         questions = (
             self.db.query(Question)

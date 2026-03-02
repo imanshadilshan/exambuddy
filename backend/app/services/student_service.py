@@ -17,6 +17,8 @@ class StudentService:
         self.db = db
 
     def get_my_enrollments(self, current_user: User) -> dict:
+        from app.models.exam_attempt import ExamAttempt, ExamAttemptStatus
+
         course_enrollments = self.db.query(CourseEnrollment).options(
             joinedload(CourseEnrollment.course)
         ).filter(
@@ -30,6 +32,28 @@ class StudentService:
             ExamEnrollment.user_id == current_user.id,
             ExamEnrollment.status == EnrollmentStatus.ACTIVE
         ).all()
+
+        # Look up last completed attempt for each enrolled exam
+        enrolled_exam_ids = [e.exam_id for e in exam_enrollments]
+        last_attempts = {}
+        if enrolled_exam_ids:
+            rows = (
+                self.db.query(ExamAttempt)
+                .filter(
+                    ExamAttempt.user_id == current_user.id,
+                    ExamAttempt.exam_id.in_(enrolled_exam_ids),
+                    ExamAttempt.status.in_([
+                        ExamAttemptStatus.SUBMITTED,
+                        ExamAttemptStatus.TIMEOUT,
+                    ]),
+                )
+                .order_by(ExamAttempt.submitted_at.desc())
+                .all()
+            )
+            for row in rows:
+                eid = str(row.exam_id)
+                if eid not in last_attempts:
+                    last_attempts[eid] = row
 
         return {
             "courses": [
@@ -58,7 +82,10 @@ class StudentService:
                         "image_url": e.exam.image_url,
                         "price": e.exam.price
                     },
-                    "enrolled_at": e.enrolled_at
+                    "enrolled_at": e.enrolled_at,
+                    "already_attempted": str(e.exam_id) in last_attempts,
+                    "last_score": last_attempts[str(e.exam_id)].marks_obtained if str(e.exam_id) in last_attempts else None,
+                    "last_total": last_attempts[str(e.exam_id)].total_questions if str(e.exam_id) in last_attempts else None,
                 }
                 for e in exam_enrollments
             ]
@@ -119,35 +146,61 @@ class StudentService:
         return [row.subject for row in rows]
 
     def get_rankings_leaderboard(self, subject: str, limit: int, current_user: Optional[User]) -> List[dict]:
-        rows = (
+        # Subquery: last completed attempt per user per exam in this subject
+        last_attempt_sq = (
             self.db.query(
-                ExamAttempt.user_id.label("user_id"),
-                Student.full_name.label("full_name"),
-                Student.school.label("school"),
-                Student.district.label("district"),
-                Student.grade.label("grade"),
-                func.coalesce(func.sum(ExamAttempt.marks_obtained), 0).label("score"),
-                func.coalesce(func.sum(ExamAttempt.time_taken_seconds), 0).label("time_taken"),
-                func.count(ExamAttempt.id).label("attempts"),
+                ExamAttempt.user_id,
+                ExamAttempt.exam_id,
+                func.max(ExamAttempt.submitted_at).label("last_submitted_at"),
             )
-            .join(User, User.id == ExamAttempt.user_id)
-            .join(Student, Student.user_id == User.id)
-            .join(Exam, Exam.id == ExamAttempt.exam_id)
-            .join(Course, Course.id == Exam.course_id)
+            .join(Exam, ExamAttempt.exam_id == Exam.id)
+            .join(Course, Exam.course_id == Course.id)
             .filter(
                 Course.subject == subject,
                 ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
             )
-            .group_by(
+            .group_by(ExamAttempt.user_id, ExamAttempt.exam_id)
+            .subquery()
+        )
+
+        # Join to get marks/time for those last attempts
+        last_attempt_data_sq = (
+            self.db.query(
                 ExamAttempt.user_id,
+                ExamAttempt.marks_obtained,
+                ExamAttempt.time_taken_seconds,
+            )
+            .join(
+                last_attempt_sq,
+                (ExamAttempt.user_id == last_attempt_sq.c.user_id)
+                & (ExamAttempt.exam_id == last_attempt_sq.c.exam_id)
+                & (ExamAttempt.submitted_at == last_attempt_sq.c.last_submitted_at),
+            )
+            .subquery()
+        )
+
+        rows = (
+            self.db.query(
+                last_attempt_data_sq.c.user_id.label("user_id"),
+                Student.full_name.label("full_name"),
+                Student.school.label("school"),
+                Student.district.label("district"),
+                Student.grade.label("grade"),
+                func.coalesce(func.sum(last_attempt_data_sq.c.marks_obtained), 0).label("score"),
+                func.coalesce(func.sum(last_attempt_data_sq.c.time_taken_seconds), 0).label("time_taken"),
+                func.count(last_attempt_data_sq.c.user_id).label("attempts"),
+            )
+            .join(Student, Student.user_id == last_attempt_data_sq.c.user_id)
+            .group_by(
+                last_attempt_data_sq.c.user_id,
                 Student.full_name,
                 Student.school,
                 Student.district,
                 Student.grade,
             )
             .order_by(
-                func.coalesce(func.sum(ExamAttempt.marks_obtained), 0).desc(),
-                func.coalesce(func.sum(ExamAttempt.time_taken_seconds), 0).asc(),
+                func.coalesce(func.sum(last_attempt_data_sq.c.marks_obtained), 0).desc(),
+                func.coalesce(func.sum(last_attempt_data_sq.c.time_taken_seconds), 0).asc(),
             )
             .limit(max(1, min(limit, 200)))
             .all()

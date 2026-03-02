@@ -131,6 +131,14 @@ const coursesSlice = createSlice({
     clearError: (state) => {
       state.error = null
     },
+    markExamAttempted: (state, action: PayloadAction<{ examId: string; score: number; total: number }>) => {
+      const exam = state.currentCourseExams.find(e => e.id === action.payload.examId)
+      if (exam) {
+        exam.already_attempted = true
+        exam.last_score = action.payload.score
+        exam.last_total = action.payload.total
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -236,5 +244,5 @@ const coursesSlice = createSlice({
   },
 })
 
-export const { clearError } = coursesSlice.actions
+export const { clearError, markExamAttempted } = coursesSlice.actions
 export default coursesSlice.reducer

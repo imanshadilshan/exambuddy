@@ -106,26 +106,53 @@ def _compute_subject_ranks(db: Session, user_id: UUID, subject: str, district: O
     from app.models.course import Course
     from app.models.exam import Exam
     from app.models.exam_attempt import ExamAttempt, ExamAttemptStatus
-    rows = (
+
+    # Subquery: get the last (most recent) completed attempt per user per exam
+    last_attempt_sq = (
         db.query(
-            ExamAttempt.user_id.label("user_id"),
-            Student.district.label("district"),
-            func.coalesce(func.sum(ExamAttempt.marks_obtained), 0).label("score"),
-            func.coalesce(func.sum(ExamAttempt.time_taken_seconds), 0).label("time_taken"),
+            ExamAttempt.user_id,
+            ExamAttempt.exam_id,
+            func.max(ExamAttempt.submitted_at).label("last_submitted_at"),
         )
-        .join(User, User.id == ExamAttempt.user_id)
-        .join(Student, Student.user_id == User.id)
-        .join(Exam, Exam.id == ExamAttempt.exam_id)
-        .join(Course, Course.id == Exam.course_id)
+        .join(Exam, ExamAttempt.exam_id == Exam.id)
+        .join(Course, Exam.course_id == Course.id)
         .filter(
             Course.subject == subject,
             ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
         )
-        .group_by(ExamAttempt.user_id, Student.district)
+        .group_by(ExamAttempt.user_id, ExamAttempt.exam_id)
+        .subquery()
+    )
+
+    # Join back to get marks/time for each last attempt
+    last_attempt_data_sq = (
+        db.query(
+            ExamAttempt.user_id,
+            ExamAttempt.marks_obtained,
+            ExamAttempt.time_taken_seconds,
+        )
+        .join(
+            last_attempt_sq,
+            (ExamAttempt.user_id == last_attempt_sq.c.user_id)
+            & (ExamAttempt.exam_id == last_attempt_sq.c.exam_id)
+            & (ExamAttempt.submitted_at == last_attempt_sq.c.last_submitted_at),
+        )
+        .subquery()
+    )
+
+    rows = (
+        db.query(
+            last_attempt_data_sq.c.user_id.label("user_id"),
+            Student.district.label("district"),
+            func.coalesce(func.sum(last_attempt_data_sq.c.marks_obtained), 0).label("score"),
+            func.coalesce(func.sum(last_attempt_data_sq.c.time_taken_seconds), 0).label("time_taken"),
+        )
+        .join(Student, Student.user_id == last_attempt_data_sq.c.user_id)
+        .group_by(last_attempt_data_sq.c.user_id, Student.district)
         .order_by(
-            func.coalesce(func.sum(ExamAttempt.marks_obtained), 0).desc(),
-            func.coalesce(func.sum(ExamAttempt.time_taken_seconds), 0).asc(),
-            ExamAttempt.user_id.asc(),
+            func.coalesce(func.sum(last_attempt_data_sq.c.marks_obtained), 0).desc(),
+            func.coalesce(func.sum(last_attempt_data_sq.c.time_taken_seconds), 0).asc(),
+            last_attempt_data_sq.c.user_id.asc(),
         )
         .all()
     )
@@ -229,3 +256,87 @@ def get_my_attempts(
 ):
     service = ExamService(db)
     return service.get_my_attempts(current_user, limit)
+
+
+@router.get("/exams/{exam_id}/last-attempt")
+def get_last_attempt_review(
+    exam_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the full Q&A review of the student's last completed attempt for an exam."""
+    from app.models.exam_attempt import ExamAttempt, ExamAttemptStatus, ExamAttemptAnswer
+    from app.models.question import Question, QuestionOption
+    from app.models.exam import Exam
+
+    attempt = (
+        db.query(ExamAttempt)
+        .filter(
+            ExamAttempt.user_id == current_user.id,
+            ExamAttempt.exam_id == exam_id,
+            ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]),
+        )
+        .order_by(ExamAttempt.submitted_at.desc())
+        .first()
+    )
+    if not attempt:
+        raise HTTPException(status_code=404, detail="No completed attempt found for this exam")
+
+    exam = db.query(Exam).filter(Exam.id == attempt.exam_id).first()
+    answers = (
+        db.query(ExamAttemptAnswer)
+        .filter(ExamAttemptAnswer.attempt_id == attempt.id)
+        .all()
+    )
+    answer_map = {str(a.question_id): str(a.selected_option_id) if a.selected_option_id else None for a in answers}
+
+    questions = (
+        db.query(Question)
+        .filter(Question.exam_id == str(exam_id))
+        .order_by(Question.order_number.asc())
+        .all()
+    )
+
+    review = []
+    for q in questions:
+        options = sorted(q.options, key=lambda o: o.order_number)
+        correct_option = next((o for o in options if o.is_correct), None)
+        selected_id = answer_map.get(str(q.id))
+        is_correct = selected_id is not None and selected_id == str(correct_option.id) if correct_option else False
+        review.append({
+            "question_id": str(q.id),
+            "question_text": q.question_text,
+            "question_image_url": q.question_image_url,
+            "explanation": q.explanation,
+            "selected_option_id": selected_id,
+            "correct_option_id": str(correct_option.id) if correct_option else None,
+            "is_correct": is_correct,
+            "options": [
+                {
+                    "id": str(o.id),
+                    "option_text": o.option_text,
+                    "option_image_url": o.option_image_url,
+                    "order_number": o.order_number,
+                }
+                for o in options
+            ],
+        })
+
+    subject = exam.course.subject if exam and exam.course else ""
+    district = current_user.student.district if current_user.student else None
+    service = ExamService(db)
+    overall_rank, district_rank = service._compute_subject_ranks(current_user.id, subject, district)
+
+    return {
+        "attempt_id": str(attempt.id),
+        "marks_obtained": attempt.marks_obtained,
+        "total_questions": attempt.total_questions,
+        "time_taken_seconds": attempt.time_taken_seconds,
+        "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
+        "review": review,
+        "ranking": {
+            "subject": subject,
+            "overall_rank": overall_rank,
+            "district_rank": district_rank,
+        },
+    }

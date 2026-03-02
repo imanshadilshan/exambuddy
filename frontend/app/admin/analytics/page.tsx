@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAppSelector } from '@/lib/redux/hooks'
-import { getAdminAnalytics, getAdminStats, AnalyticsData, AdminStats } from '@/lib/api/admin'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchAdminAnalytics, fetchAdminStats } from '@/lib/redux/slices/adminSlice'
+import { fmtLKR } from '@/lib/utils'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -63,20 +64,12 @@ function HorizontalBar({ label, value, max, color = 'bg-teal-500', formatValue }
   )
 }
 
-function fmtLKR(n: number) {
-  if (n >= 1_000_000) return `Rs ${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `Rs ${(n / 1_000).toFixed(0)}K`
-  return `Rs ${n}`
-}
 
 export default function AdminAnalyticsPage() {
   const router = useRouter()
+  const dispatch = useAppDispatch()
   const { user } = useAppSelector((s) => s.auth)
-
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
-  const [stats, setStats] = useState<AdminStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { analytics, analyticsLoading: loading, stats, error } = useAppSelector((s) => s.admin)
 
   useEffect(() => {
     if (user && user.role !== 'admin') router.push('/')
@@ -84,11 +77,9 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     if (!user || user.role !== 'admin') return
-    Promise.all([getAdminAnalytics(), getAdminStats()])
-      .then(([a, s]) => { setAnalytics(a); setStats(s) })
-      .catch(() => setError('Failed to load analytics'))
-      .finally(() => setLoading(false))
-  }, [user])
+    dispatch(fetchAdminAnalytics())
+    dispatch(fetchAdminStats())
+  }, [user, dispatch])
 
   // Prepare monthly revenue chart data (last 6 months)
   const revenueChartData = analytics?.revenue_by_month.slice(-6).map((r) => ({

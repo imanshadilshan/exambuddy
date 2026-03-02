@@ -2,19 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAppSelector } from '@/lib/redux/hooks'
-import { getAdminRankings, AdminRankingRow } from '@/lib/api/admin'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchAdminRankings } from '@/lib/redux/slices/adminSlice'
 
 const GRADES = [10, 11, 12, 13]
 
 export default function AdminRankingsPage() {
   const router = useRouter()
+  const dispatch = useAppDispatch()
   const { user } = useAppSelector((s) => s.auth)
+  const { rankings: rankingsData, rankingsLoading: loading, error } = useAppSelector((s) => s.admin)
 
-  const [rankings, setRankings] = useState<AdminRankingRow[]>([])
-  const [subjects, setSubjects] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const rankings = rankingsData?.rankings ?? []
+  const subjects = rankingsData?.subjects ?? []
 
   const [subject, setSubject] = useState('')
   const [grade, setGrade] = useState<number | ''>('')
@@ -25,27 +25,12 @@ export default function AdminRankingsPage() {
 
   useEffect(() => {
     if (!user || user.role !== 'admin') return
-    load()
+    const params: Record<string, any> = { limit: 100 }
+    if (subject) params.subject = subject
+    if (grade !== '') params.grade = grade
+    dispatch(fetchAdminRankings(params))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, subject, grade])
-
-  const load = async () => {
-    try {
-      setLoading(true)
-      setError('')
-      const params: Record<string, any> = { limit: 100 }
-      if (subject) params.subject = subject
-      if (grade !== '') params.grade = grade
-
-      const data = await getAdminRankings(params)
-      setRankings(data.rankings)
-      setSubjects(data.subjects)
-    } catch {
-      setError('Failed to load rankings')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const medal = (rank: number) => {
     if (rank === 1) return '🥇'

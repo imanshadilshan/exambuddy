@@ -248,15 +248,36 @@ function ExamCard({ exam, onEnroll, onPurchase, onStart, enrolling }: ExamCardPr
 
         {exam.is_enrolled ? (
           <div>
-            <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg text-sm mb-2">
-              ✓ Enrolled {exam.enrollment_type === 'course' ? '(via course)' : ''}
-            </div>
-            <button
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-              onClick={() => onStart(exam.id)}
-            >
-              Start Exam
-            </button>
+            {exam.already_attempted ? (
+              <div className="space-y-2">
+                <div className="bg-gray-100 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                  <span>✓ Completed</span>
+                  {exam.last_score !== null && exam.last_total !== null && (
+                    <span className="ml-auto font-semibold">
+                      {exam.last_score}/{exam.last_total}
+                    </span>
+                  )}
+                </div>
+                <button
+                  disabled
+                  className="w-full px-4 py-2 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed"
+                >
+                  Already Attempted
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg text-sm mb-2">
+                  ✓ Enrolled {exam.enrollment_type === 'course' ? '(via course)' : ''}
+                </div>
+                <button
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  onClick={() => onStart(exam.id)}
+                >
+                  Start Exam
+                </button>
+              </div>
+            )}
           </div>
         ) : exam.is_free ? (
           <button

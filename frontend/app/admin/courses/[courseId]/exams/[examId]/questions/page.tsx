@@ -7,15 +7,9 @@ import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 import { fetchCourses } from '@/lib/redux/slices/coursesSlice'
 import { fetchExams } from '@/lib/redux/slices/examsSlice'
-import { 
-  fetchQuestions,
-  createQuestion,
-  updateQuestion,
-  deleteQuestion,
-  importQuestionsCSV,
-  clearError as clearQuestionsError
-} from '@/lib/redux/slices/questionsSlice'
+import { fetchQuestions, createQuestion, updateQuestion, deleteQuestion, importQuestionsCSV } from '@/lib/redux/slices/questionsSlice'
 import { uploadImage, deleteImage } from '@/lib/api/admin'
+import { getErrorMessage } from '@/lib/utils'
 
 type Course = {
   id: string
@@ -141,23 +135,6 @@ export default function QuestionsPage() {
     if (foundCourse) setCourse(foundCourse)
     if (foundExam) setExam(foundExam)
   }, [courses, exams, courseId, examId])
-
-  const getErrorMessage = (err: any): string => {
-    if (err?.response?.data?.detail && typeof err.response.data.detail === 'object') {
-      if (err.response.data.detail.msg) {
-        return err.response.data.detail.msg
-      }
-      if (Array.isArray(err.response.data.detail)) {
-        const messages = err.response.data.detail.map((e: any) => e.msg || JSON.stringify(e)).join('; ')
-        return messages || 'Validation error occurred'
-      }
-      return 'An error occurred'
-    }
-    if (typeof err?.response?.data?.detail === 'string') {
-      return err.response.data.detail
-    }
-    return 'An error occurred'
-  }
 
   const uploadQuestionImage = async (file: File) => {
     const result = await uploadImage(file, 'questions')
@@ -438,6 +415,8 @@ export default function QuestionsPage() {
       
       setSuccess(message)
       closeImportModal()
+      // Re-fetch questions from server to ensure the list is up to date
+      dispatch(fetchQuestions(examId))
     } catch (err: any) {
       setLocalError(getErrorMessage(err) || 'Failed to import questions')
     } finally {

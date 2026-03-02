@@ -640,7 +640,45 @@ def admin_rankings(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin),
 ):
-    """Admin view of subject rankings across all students"""
+    """Admin view of subject rankings across all students (based on last attempt per exam)"""
+
+    # Step 1: last completed attempt per (user, exam)
+    last_attempt_sq = (
+        db.query(
+            ExamAttempt.user_id,
+            ExamAttempt.exam_id,
+            func.max(ExamAttempt.submitted_at).label("last_submitted_at"),
+        )
+        .join(Exam, ExamAttempt.exam_id == Exam.id)
+        .join(Course, Exam.course_id == Course.id)
+        .filter(ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]))
+    )
+    if subject:
+        last_attempt_sq = last_attempt_sq.filter(Course.subject.ilike(f"%{subject}%"))
+    if grade:
+        last_attempt_sq = last_attempt_sq.join(Student, Student.user_id == ExamAttempt.user_id).filter(Student.grade == grade)
+    last_attempt_sq = last_attempt_sq.group_by(ExamAttempt.user_id, ExamAttempt.exam_id).subquery()
+
+    # Step 2: join back to get marks/time from those last attempts
+    last_data_sq = (
+        db.query(
+            ExamAttempt.user_id,
+            ExamAttempt.marks_obtained,
+            ExamAttempt.total_questions,
+            ExamAttempt.time_taken_seconds,
+            Exam.course_id,
+        )
+        .join(
+            last_attempt_sq,
+            (ExamAttempt.user_id == last_attempt_sq.c.user_id)
+            & (ExamAttempt.exam_id == last_attempt_sq.c.exam_id)
+            & (ExamAttempt.submitted_at == last_attempt_sq.c.last_submitted_at),
+        )
+        .join(Exam, ExamAttempt.exam_id == Exam.id)
+        .subquery()
+    )
+
+    # Step 3: aggregate per (user, subject)
     q = (
         db.query(
             User.id.label("user_id"),
@@ -649,26 +687,21 @@ def admin_rankings(
             Student.grade,
             Student.school,
             Course.subject,
-            func.sum(ExamAttempt.marks_obtained).label("total_marks"),
-            func.sum(ExamAttempt.total_questions).label("total_questions"),
-            func.count(ExamAttempt.id).label("attempt_count"),
+            func.sum(last_data_sq.c.marks_obtained).label("total_marks"),
+            func.sum(last_data_sq.c.total_questions).label("total_questions"),
+            func.count(last_data_sq.c.user_id).label("attempt_count"),
         )
         .join(Student, Student.user_id == User.id)
-        .join(ExamAttempt, ExamAttempt.user_id == User.id)
-        .join(Exam, Exam.id == ExamAttempt.exam_id)
-        .join(Course, Course.id == Exam.course_id)
-        .filter(ExamAttempt.status == ExamAttemptStatus.SUBMITTED)
+        .join(last_data_sq, last_data_sq.c.user_id == User.id)
+        .join(Course, Course.id == last_data_sq.c.course_id)
+        .group_by(User.id, Student.full_name, Student.district, Student.grade, Student.school, Course.subject)
+        .order_by(func.sum(last_data_sq.c.marks_obtained).desc())
+        .limit(limit)
     )
     if subject:
         q = q.filter(Course.subject.ilike(f"%{subject}%"))
     if grade:
         q = q.filter(Student.grade == grade)
-
-    q = (
-        q.group_by(User.id, Student.full_name, Student.district, Student.grade, Student.school, Course.subject)
-        .order_by(func.sum(ExamAttempt.marks_obtained).desc())
-        .limit(limit)
-    )
 
     rows = q.all()
     rankings = []

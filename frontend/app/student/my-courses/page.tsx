@@ -21,10 +21,8 @@ export default function MyCoursesPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    if (enrollments.courses.length === 0 && enrollments.exams.length === 0) {
-      dispatch(fetchMyEnrollments())
-    }
-  }, [dispatch, isAuthenticated, enrollments])
+    dispatch(fetchMyEnrollments())
+  }, [dispatch, isAuthenticated])
 
   if (authLoading || loadingEnrollments) {
     return (
@@ -171,16 +169,32 @@ export default function MyCoursesPage() {
                         <span>•</span>
                         <span>{item.exam.duration_minutes} min</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-full font-medium">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          Enrolled
-                        </span>
-                        <span className="text-xs text-blue-600 font-medium group-hover:underline">
-                          Start Exam →
-                        </span>
+                    <div className="flex items-center justify-between">
+                        {item.already_attempted ? (
+                          <>
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 border border-gray-300 px-2 py-1 rounded-full font-medium">
+                              ✓ Completed
+                              {item.last_score !== null && item.last_total !== null && (
+                                <span className="font-bold ml-1">{item.last_score}/{item.last_total}</span>
+                              )}
+                            </span>
+                            <span className="text-xs text-gray-500 font-medium group-hover:underline">
+                              See Result →
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-full font-medium">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                              Enrolled
+                            </span>
+                            <span className="text-xs text-blue-600 font-medium group-hover:underline">
+                              Start Exam →
+                            </span>
+                          </>
+                        )}
                       </div>
                     </Link>
                   ))}

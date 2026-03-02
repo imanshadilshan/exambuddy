@@ -9,11 +9,23 @@ export const errorHandlingMiddleware: Middleware = (store) => (next) => (action:
   
   // Check if action is rejected (error)
   if (action.type && action.type.endsWith('/rejected')) {
-    const errorMessage = action.payload as string || 'An error occurred'
-    
+    const payload = action.payload
+
+    // Skip toast for 409 "already attempted" — handled silently by the exam page
+    if (payload && typeof payload === 'object' && payload.alreadyAttempted) {
+      return result
+    }
+
+    const errorMessage =
+      typeof payload === 'string'
+        ? payload
+        : typeof payload === 'object' && payload !== null
+          ? (payload.detail || payload.message || 'An error occurred')
+          : 'An error occurred'
+
     store.dispatch(showNotification({
       type: 'error',
-      message: errorMessage,
+      message: typeof errorMessage === 'string' ? errorMessage : 'An error occurred',
       duration: 5000,
     }))
   }

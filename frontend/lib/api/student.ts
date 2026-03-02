@@ -27,6 +27,9 @@ export interface ExamWithAccess {
   is_free: boolean
   is_enrolled: boolean
   enrollment_type: 'course' | 'exam' | null
+  already_attempted: boolean
+  last_score: number | null
+  last_total: number | null
 }
 
 export interface EnrollmentResponse {
@@ -59,6 +62,9 @@ export interface EnrolledExamItem {
     price: number
   }
   enrolled_at: string
+  already_attempted: boolean
+  last_score: number | null
+  last_total: number | null
 }
 
 export interface MyEnrollmentsResponse {

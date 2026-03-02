@@ -6,6 +6,7 @@ import coursesReducer from './slices/coursesSlice'
 import examsReducer from './slices/examsSlice'
 import questionsReducer from './slices/questionsSlice'
 import studentDashboardReducer from './slices/studentDashboardSlice'
+import adminReducer from './slices/adminSlice'
 import { errorHandlingMiddleware, loadingMiddleware } from './middleware'
 
 export const store = configureStore({
@@ -17,6 +18,7 @@ export const store = configureStore({
     exams: examsReducer,
     questions: questionsReducer,
     studentDashboard: studentDashboardReducer,
+    admin: adminReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

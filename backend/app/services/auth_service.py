@@ -129,7 +129,7 @@ class AuthService:
         google_id = google_info["google_id"]
         email = google_info["email"]
         full_name = google_info["full_name"]
-        picture = google_info["picture"]
+        picture = google_info["picture"] or None  # treat empty string as no picture
 
         # Try to find existing user by google_id first, then by email
         user = self.db.query(User).filter(User.google_id == google_id).first()
@@ -174,7 +174,7 @@ class AuthService:
                 school="",
                 district="",
                 grade=11,  # Default, will be updated in profile completion
-                profile_photo_url=picture,
+                profile_photo_url=picture or None,  # None if Google has no picture
                 has_paid=False,
             )
             self.db.add(student)

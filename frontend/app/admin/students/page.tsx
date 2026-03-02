@@ -2,19 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAppSelector } from '@/lib/redux/hooks'
-import { getAdminStudents, toggleStudentActive, AdminStudent } from '@/lib/api/admin'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchAdminStudents, toggleStudentActiveStatus } from '@/lib/redux/slices/adminSlice'
 
 const GRADES = [10, 11, 12, 13]
 
 export default function AdminStudentsPage() {
   const router = useRouter()
+  const dispatch = useAppDispatch()
   const { user } = useAppSelector((s) => s.auth)
+  const { students, studentsTotal: total, studentsLoading: loading, error } = useAppSelector((s) => s.admin)
 
-  const [students, setStudents] = useState<AdminStudent[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   // Filters
@@ -32,40 +30,23 @@ export default function AdminStudentsPage() {
   }, [user, router])
 
   useEffect(() => {
-    load()
+    if (!user || user.role !== 'admin') return
+    const params: Record<string, any> = { skip: page * limit, limit }
+    if (search) params.search = search
+    if (grade !== '') params.grade = grade
+    if (district) params.district = district
+    if (activeFilter === 'active') params.is_active = true
+    if (activeFilter === 'inactive') params.is_active = false
+    dispatch(fetchAdminStudents(params))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, grade, district, activeFilter, page])
-
-  const load = async () => {
-    try {
-      setLoading(true)
-      setError('')
-      const params: Record<string, any> = { skip: page * limit, limit }
-      if (search) params.search = search
-      if (grade !== '') params.grade = grade
-      if (district) params.district = district
-      if (activeFilter === 'active') params.is_active = true
-      if (activeFilter === 'inactive') params.is_active = false
-
-      const data = await getAdminStudents(params)
-      setStudents(data.students)
-      setTotal(data.total)
-    } catch {
-      setError('Failed to load students')
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [user, search, grade, district, activeFilter, page])
 
   const handleToggle = async (userId: string) => {
     try {
       setTogglingId(userId)
-      await toggleStudentActive(userId)
-      setStudents((prev) =>
-        prev.map((s) => s.user_id === userId ? { ...s, is_active: !s.is_active } : s)
-      )
+      await dispatch(toggleStudentActiveStatus(userId)).unwrap()
     } catch {
-      setError('Failed to update student status')
+      // error is in Redux state
     } finally {
       setTogglingId(null)
     }

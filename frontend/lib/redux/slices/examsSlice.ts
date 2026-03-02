@@ -88,7 +88,14 @@ export const startExam = createAsyncThunk(
       const resp = await studentApi.startExam(examId)
       return resp
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to start exam')
+      const detail = error?.response?.data?.detail
+      // 409 = already attempted — pass the full detail object as rejection payload
+      if (error?.response?.status === 409 && detail?.already_attempted) {
+        return rejectWithValue({ alreadyAttempted: true, ...detail })
+      }
+      return rejectWithValue(
+        typeof detail === 'string' ? detail : 'Failed to start exam'
+      )
     }
   }
 )
@@ -181,7 +188,9 @@ const examsSlice = createSlice({
       })
       .addCase(startExam.rejected, (state, action) => {
         state.studentLoading = false
-        state.studentError = action.payload as string
+        // Important: payload can be the alreadyAttempted object (HTTP 409) — never put objects into error
+        const p = action.payload
+        state.studentError = typeof p === 'string' ? p : null
       })
       .addCase(submitExamAttempt.pending, (state) => {
         state.studentLoading = true

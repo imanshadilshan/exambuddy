@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import { fetchCourses, createCourse, updateCourse, deleteCourse, clearError, AdminCourse } from '@/lib/redux/slices/coursesSlice'
+import { fetchCourses, createCourse, updateCourse, deleteCourse, AdminCourse } from '@/lib/redux/slices/coursesSlice'
 import { uploadImage, deleteImage } from '@/lib/api/admin'
+import { getErrorMessage } from '@/lib/utils'
 
 export default function AdminCoursesPage() {
   const router = useRouter()
@@ -36,42 +37,12 @@ export default function AdminCoursesPage() {
 
   const uploadImageToCloudinary = async (file: File) => {
     const result = await uploadImage(file, 'courses')
-    return {
-      image_url: result.image_url,
-      image_public_id: result.image_public_id,
-    }
+    return { image_url: result.image_url, image_public_id: result.image_public_id }
   }
 
   const deleteImageFromCloudinary = async (publicId: string | null | undefined) => {
     if (!publicId) return
-    try {
-      await deleteImage(publicId)
-    } catch (err: any) {
-      console.error('Failed to delete image from Cloudinary:', err)
-    }
-  }
-
-  const getErrorMessage = (err: any): string => {
-    // Handle Pydantic validation errors (object with msg field)
-    if (err?.response?.data?.detail && typeof err.response.data.detail === 'object') {
-      if (err.response.data.detail.msg) {
-        return err.response.data.detail.msg
-      }
-      // Handle validation errors that are arrays
-      if (Array.isArray(err.response.data.detail)) {
-        const messages = err.response.data.detail
-          .map((e: any) => e.msg || JSON.stringify(e))
-          .join('; ')
-        return messages || 'Validation error occurred'
-      }
-      return 'An error occurred'
-    }
-    // Handle string error messages
-    if (typeof err?.response?.data?.detail === 'string') {
-      return err.response.data.detail
-    }
-    // Fallback
-    return 'An error occurred'
+    try { await deleteImage(publicId) } catch (err) { console.error('Failed to delete image:', err) }
   }
 
   useEffect(() => {

@@ -1,29 +1,12 @@
 'use client'
 
-import React, { useEffect, useState, ReactNode } from 'react'
+import React, { useEffect, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import { getAdminStats, AdminStats } from '@/lib/api/admin'
-
-function timeAgo(isoString: string | null): string {
-  if (!isoString) return ''
-  const diff = Date.now() - new Date(isoString).getTime()
-  const s = Math.floor(diff / 1000)
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
-function fmtLKR(amount: number) {
-  if (amount >= 1_000_000) return `Rs ${(amount / 1_000_000).toFixed(1)}M`
-  if (amount >= 1_000) return `Rs ${(amount / 1_000).toFixed(1)}K`
-  return `Rs ${amount}`
-}
+import { fetchAdminStats } from '@/lib/redux/slices/adminSlice'
+import { fmtLKR, timeAgo } from '@/lib/utils'
 
 const activityIcons: Record<string, { bg: string; color: string; icon: ReactNode }> = {
   student: {
@@ -60,8 +43,7 @@ export default function AdminDashboard() {
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
 
-  const [stats, setStats] = useState<AdminStats | null>(null)
-  const [statsLoading, setStatsLoading] = useState(true)
+  const { stats, statsLoading } = useAppSelector((state) => state.admin)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -75,12 +57,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (user?.role === 'admin') {
-      getAdminStats()
-        .then(setStats)
-        .catch(console.error)
-        .finally(() => setStatsLoading(false))
+      dispatch(fetchAdminStats())
     }
-  }, [user])
+  }, [user, dispatch])
 
   if (isLoading || !user) {
     return (

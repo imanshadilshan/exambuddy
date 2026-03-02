@@ -166,8 +166,10 @@ const questionsSlice = createSlice({
       })
       .addCase(importQuestionsCSV.fulfilled, (state, action: PayloadAction<Question[]>) => {
         state.isLoading = false
-        // Replace all questions with imported ones
-        state.questions = action.payload
+        // Append imported questions; the page will re-fetch to get the canonical list
+        if (action.payload && action.payload.length > 0) {
+          state.questions = [...state.questions, ...action.payload]
+        }
       })
       .addCase(importQuestionsCSV.rejected, (state, action) => {
         state.isLoading = false

@@ -8,6 +8,7 @@ import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 import { fetchCourses } from '@/lib/redux/slices/coursesSlice'
 import { fetchExams, createExam, updateExam, deleteExam } from '@/lib/redux/slices/examsSlice'
 import { uploadImage, deleteImage } from '@/lib/api/admin'
+import { getErrorMessage } from '@/lib/utils'
 
 type Course = {
   id: string
@@ -39,7 +40,8 @@ export default function CourseExamsPage() {
   const dispatch = useAppDispatch()
   const { user, isAuthenticated, isLoading } = useAppSelector((state) => state.auth)
   const { courses } = useAppSelector((state) => state.courses)
-  const { exams, isLoading: loadingData, error: storeError } = useAppSelector((state) => state.exams)
+  const { exams: allExams, isLoading: loadingData, error: storeError } = useAppSelector((state) => state.exams)
+  const exams = allExams.filter((e) => e.course_id === courseId)
 
   const [localError, setLocalError] = useState('')
   const [examImageFile, setExamImageFile] = useState<File | null>(null)
@@ -78,29 +80,6 @@ export default function CourseExamsPage() {
     } catch (err: any) {
       console.error('Failed to delete image from Cloudinary:', err)
     }
-  }
-
-  const getErrorMessage = (err: any): string => {
-    // Handle Pydantic validation errors (object with msg field)
-    if (err?.response?.data?.detail && typeof err.response.data.detail === 'object') {
-      if (err.response.data.detail.msg) {
-        return err.response.data.detail.msg
-      }
-      // Handle validation errors that are arrays
-      if (Array.isArray(err.response.data.detail)) {
-        const messages = err.response.data.detail
-          .map((e: any) => e.msg || JSON.stringify(e))
-          .join('; ')
-        return messages || 'Validation error occurred'
-      }
-      return 'An error occurred'
-    }
-    // Handle string error messages
-    if (typeof err?.response?.data?.detail === 'string') {
-      return err.response.data.detail
-    }
-    // Fallback
-    return 'An error occurred'
   }
 
   const pageTitle = useMemo(() => {

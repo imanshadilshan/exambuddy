@@ -1,0 +1,6 @@
+question_text,option_a,option_b,option_c,option_d,option_e,correct_answer,explanation
+"What is the SI unit of electric potential difference?",Ampere,Ohm,Volt,Watt,Coulomb,C,The volt (V) is the SI unit of electric potential difference, defined as joules per coulomb.
+"Which law states that the induced electromotive force is proportional to the rate of change of magnetic flux?",Ohm's Law,Faraday's Law,Lenz's Law,Coulomb's Law,Ampere's Law,B,Faraday's Law of electromagnetic induction states that induced EMF is proportional to the rate of change of magnetic flux linkage.
+"What is the dimensional formula for power?",ML²T⁻³,ML²T⁻²,MLT⁻²,ML²T⁻¹,MLT⁻³,A,"Power is work/time or energy/time. Energy has dimensions ML²T⁻², so power has ML²T⁻³."
+"In simple harmonic motion, what is the phase difference between displacement and acceleration?",0 degrees,90 degrees,180 degrees,270 degrees,360 degrees,C,"Acceleration is proportional to negative displacement (a = -ω²x), making them 180° out of phase."
+"What is the work function in the photoelectric effect?",Maximum kinetic energy of emitted electrons,Minimum energy required to remove an electron,Wavelength of incident light,Frequency of incident light,Speed of emitted electrons,B,The work function is the minimum energy needed to remove an electron from the metal surface.

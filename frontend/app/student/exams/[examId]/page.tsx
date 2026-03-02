@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import * as studentApi from '@/lib/api/student'
+import apiClient from '@/lib/api/client'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { startExam, submitExamAttempt } from '@/lib/redux/slices/examsSlice'
+import { markExamAttempted } from '@/lib/redux/slices/coursesSlice'
 
 function formatTime(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds)
@@ -28,6 +30,7 @@ export default function StudentExamPage() {
 
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<studentApi.SubmitExamResponse | null>(null)
+  const [loadingPastResult, setLoadingPastResult] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string | null>>({})
   const [isPageVisible, setIsPageVisible] = useState(true)
@@ -80,7 +83,7 @@ export default function StudentExamPage() {
     const init = async () => {
       try {
         const action = await dispatch(startExam(examId))
-        
+
         if (startExam.fulfilled.match(action)) {
           const data = action.payload
           const initialAnswers: Record<string, string | null> = {}
@@ -88,10 +91,20 @@ export default function StudentExamPage() {
             initialAnswers[q.id] = null
           })
           setAnswers(initialAnswers)
-
           const end = new Date(data.ends_at).getTime()
-          const now = Date.now()
-          setTimeLeft(Math.max(0, Math.floor((end - now) / 1000)))
+          setTimeLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)))
+        } else if (startExam.rejected.match(action)) {
+          const payload = (action as any).payload
+          if (payload?.alreadyAttempted) {
+            // Fetch the full review for the past attempt
+            setLoadingPastResult(true)
+            try {
+              const resp = await apiClient.get(`/api/v1/student/exams/${examId}/last-attempt`)
+              setResult(resp.data)
+            } finally {
+              setLoadingPastResult(false)
+            }
+          }
         }
       } catch (err: any) {
         console.error('Failed to start exam:', err)
@@ -146,6 +159,12 @@ export default function StudentExamPage() {
       const action = await dispatch(submitExamAttempt({ attemptId: examData.attempt_id, payload }))
       if (submitExamAttempt.fulfilled.match(action)) {
         setResult(action.payload)
+        // Update the course card immediately — no need to refetch the whole list
+        dispatch(markExamAttempted({
+          examId: examId,
+          score: action.payload.marks_obtained,
+          total: action.payload.total_questions,
+        }))
       } else if (auto) {
         alert('Time is up and auto-submit failed. Please click Submit Paper now.')
       }
@@ -157,31 +176,40 @@ export default function StudentExamPage() {
   }
 
   const getOptionForQuestion = (questionId: string, optionId: string | null) => {
-    if (!optionId || !examData) return null
-    const question = examData.questions.find((q) => q.id === questionId)
-    if (!question) return null
-    return question.options.find((o) => o.id === optionId) || null
+    if (!optionId) return null
+    // First try live exam questions (during/after fresh attempt)
+    if (examData) {
+      const question = examData.questions.find((q) => q.id === questionId)
+      if (question) return question.options.find((o) => o.id === optionId) || null
+    }
+    // Fallback: options are embedded in the review item (past-attempt view)
+    if (result) {
+      const item = (result.review as any[]).find((r: any) => r.question_id === questionId)
+      if (item?.options) return item.options.find((o: any) => o.id === optionId) || null
+    }
+    return null
   }
 
-  if (loading) {
+  if (loading || loadingPastResult) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Loading exam...</p>
+        <p className="text-gray-600">{loadingPastResult ? 'Loading your previous results...' : 'Loading exam...'}</p>
       </div>
     )
   }
 
-  if (error && !examData) {
+  if (error && !examData && !result) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
+          {typeof error === 'string' ? error : 'Something went wrong. Please try again.'}
         </div>
       </div>
     )
   }
 
-  if (!examData) return null
+  // Show result screen even if examData is null (past-attempt view)
+  if (!examData && !result) return null
 
   return (
     <>
@@ -256,8 +284,8 @@ export default function StudentExamPage() {
               <div className="flex items-center justify-between gap-2 sm:gap-4">
                 <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                   <div className="min-w-0">
-                    <h1 className="text-sm sm:text-lg font-bold text-gray-900 truncate">{examData.exam_title}</h1>
-                    <p className="text-xs text-gray-600">{examData.subject} • Unanswered: {unansweredCount}</p>
+                    <h1 className="text-sm sm:text-lg font-bold text-gray-900 truncate">{examData?.exam_title}</h1>
+                    <p className="text-xs text-gray-600">{examData?.subject} • Unanswered: {unansweredCount}</p>
                   </div>
                 </div>
               </div>
@@ -265,7 +293,7 @@ export default function StudentExamPage() {
             </div>
 
             <div className="space-y-6">
-              {examData.questions.map((question, index) => (
+              {(examData?.questions ?? []).map((question, index) => (
                 <div key={question.id} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">
                   <div className={question.question_image_url ? "flex flex-col lg:flex-row gap-4 lg:gap-6" : ""}>
                     <div className={question.question_image_url ? "flex-1 order-2 lg:order-1" : ""}>
