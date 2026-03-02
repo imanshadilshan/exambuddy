@@ -451,18 +451,27 @@ def list_students(
     total = query.count()
     rows = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
 
+    if not rows:
+        return {"total": total, "students": []}
+
+    user_ids = [user.id for user, _ in rows]
+
+    # Load enrollment and attempt counts in bulk to avoid N+1 queries
+    enrollment_counts = dict(
+        db.query(CourseEnrollment.user_id, func.count(CourseEnrollment.id))
+        .filter(CourseEnrollment.user_id.in_(user_ids))
+        .group_by(CourseEnrollment.user_id)
+        .all()
+    )
+    attempt_counts = dict(
+        db.query(ExamAttempt.user_id, func.count(ExamAttempt.id))
+        .filter(ExamAttempt.user_id.in_(user_ids))
+        .group_by(ExamAttempt.user_id)
+        .all()
+    )
+
     result = []
     for user, student in rows:
-        enrollment_count = (
-            db.query(func.count(CourseEnrollment.id))
-            .filter(CourseEnrollment.user_id == user.id)
-            .scalar() or 0
-        )
-        attempt_count = (
-            db.query(func.count(ExamAttempt.id))
-            .filter(ExamAttempt.user_id == user.id)
-            .scalar() or 0
-        )
         result.append({
             "user_id": str(user.id),
             "email": user.email,
@@ -474,11 +483,12 @@ def list_students(
             "district": student.district,
             "grade": student.grade,
             "profile_photo_url": student.profile_photo_url,
-            "enrollment_count": enrollment_count,
-            "attempt_count": attempt_count,
+            "enrollment_count": enrollment_counts.get(user.id, 0),
+            "attempt_count": attempt_counts.get(user.id, 0),
         })
 
     return {"total": total, "students": result}
+
 
 
 @router.patch("/students/{user_id}/toggle-active")
