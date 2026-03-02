@@ -91,10 +91,10 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-white overflow-x-hidden">
       {/* Hero */}
-      <section className="relative pt-16 pb-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-teal-600 via-teal-700 to-cyan-800 overflow-hidden w-full">
+      <section className="relative min-h-[calc(100vh-4rem)] flex items-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-teal-600 via-teal-700 to-cyan-800 overflow-hidden w-full">
         <div className="absolute -top-20 right-0 w-72 h-72 bg-white/5 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative max-w-7xl mx-auto">
+        <div className="relative max-w-7xl mx-auto w-full">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/15 border border-white/25 text-white/90 rounded-full text-sm font-semibold mb-6">
@@ -118,52 +118,42 @@ export default function Home() {
                 </Link>
               </div>
             </div>
-            {/* Floating card */}
-            <div className="hidden lg:block">
-              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm ml-auto">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 font-medium">Practice Paper</p>
-                      <p className="text-sm font-bold text-gray-900">Combined Maths</p>
-                    </div>
-                  </div>
-                  <span className="text-xs bg-teal-100 text-teal-700 px-2.5 py-1 rounded-full font-semibold">Live</span>
-                </div>
-                <div className="space-y-3 mb-5">
-                  {['Question 12 / 40', 'Time left: 41:22', 'Score: 9/11 so far'].map((line, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-teal-500' : i === 1 ? 'bg-orange-400' : 'bg-green-500'}`} />
-                      <span className="text-sm text-gray-700">{line}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                    <span>Progress</span><span className="font-semibold text-gray-700">30%</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2.5">
-                    <div className="bg-teal-500 h-2.5 rounded-full" style={{ width: '30%' }} />
-                  </div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Top Performers</p>
-                  {['Amaya P. • 98%', 'Kavinda R. • 95%', 'Thisara M. • 92%'].map((name, i) => (
-                    <div key={i} className="flex items-center justify-between py-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{medals[i]}</span>
-                        <span className="text-sm text-gray-700">{name.split('•')[0].trim()}</span>
-                      </div>
-                      <span className="text-xs font-bold text-teal-600">{name.split('•')[1].trim()}</span>
-                    </div>
-                  ))}
+            {/* Modern CSS Visual Effect */}
+            <div className="hidden lg:flex relative z-10 w-full max-w-lg ml-auto h-[400px] items-center justify-center">
+              
+              {/* Glowing aura */}
+              <div className="absolute inset-0 bg-teal-400/20 blur-[100px] rounded-full" />
+
+              {/* Central Core */}
+              <div className="relative w-32 h-32 bg-gradient-to-br from-white to-teal-100 rounded-3xl shadow-[0_0_40px_rgba(20,184,166,0.5)] flex items-center justify-center animate-pulse duration-3000 rotate-12 z-20">
+                <div className="w-16 h-16 bg-gradient-to-tr from-teal-500 to-cyan-400 rounded-xl shadow-inner flex items-center justify-center -rotate-12">
+                   <span className="text-3xl filter drop-shadow-lg">🎓</span>
                 </div>
               </div>
+
+              {/* Orbit 1 */}
+              <div className="absolute w-[280px] h-[280px] border border-white/10 rounded-full animate-spin [animation-duration:15s] z-10">
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg flex items-center justify-center rotate-45">
+                   <span className="text-lg -rotate-45 block">📚</span>
+                </div>
+                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-gradient-to-br from-orange-400 to-pink-500 rounded-full shadow-lg flex items-center justify-center backdrop-blur-md">
+                   <span className="text-xs">⚡</span>
+                </div>
+              </div>
+
+              {/* Orbit 2 */}
+              <div className="absolute w-[400px] h-[400px] border border-white/5 rounded-full animate-spin [animation-duration:25s] [animation-direction:reverse] z-0">
+                <div className="absolute top-1/2 -right-6 -translate-y-1/2 w-14 h-14 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl flex items-center justify-center -rotate-12">
+                   <span className="text-2xl animate-bounce">📊</span>
+                </div>
+                <div className="absolute top-1/4 -left-4 w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full shadow-lg border-2 border-white/20 flex items-center justify-center hover:scale-110 transition-transform">
+                   <span className="text-lg">🎯</span>
+                </div>
+              </div>
+
+              {/* Floating lines/particles */}
+              <div className="absolute top-10 right-10 w-20 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-50 -rotate-45" />
+              <div className="absolute bottom-20 left-10 w-32 h-1 bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-30 rotate-12" />
             </div>
           </div>
         </div>
