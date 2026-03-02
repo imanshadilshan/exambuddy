@@ -27,6 +27,18 @@ class ProfileUpdateRequest(BaseModel):
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+
+class CompleteGoogleProfileRequest(BaseModel):
+    phone_number: str
+    school: str
+    district: str
+    grade: int
+
 from app.core.security import (
     get_password_hash,
     verify_password,
@@ -120,6 +132,40 @@ async def update_profile(
     """
     service = AuthService(db)
     return await service.update_profile(profile_data, current_user)
+
+
+@router.post("/google", response_model=dict)
+async def google_login(
+    body: GoogleLoginRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Authenticate with a Google ID token.
+    
+    - Verifies the token with Google
+    - Creates a new student account if first login
+    - Links Google ID to existing account if email already exists
+    - Returns JWT tokens + `needs_profile_completion` flag for new users
+    """
+    service = AuthService(db)
+    return await service.google_login(body.id_token)
+
+
+@router.put("/complete-google-profile", response_model=dict)
+def complete_google_profile(
+    body: CompleteGoogleProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    One-time step for new Google users to complete their student profile.
+    
+    Required fields: phone_number, school, district, grade
+    After completion, the user is redirected to the student dashboard.
+    """
+    service = AuthService(db)
+    return service.complete_google_profile(body, current_user)
+
 
 
 @router.put("/password")

@@ -25,15 +25,18 @@ class User(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)
+    password_hash = Column(String, nullable=True)  # Nullable for Google-only accounts
     role = Column(Enum(UserRole), nullable=False)
     is_active = Column(Boolean, default=False)
     is_verified = Column(Boolean, default=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
+
+    # OAuth fields
+    google_id = Column(String, unique=True, nullable=True, index=True)
+    auth_provider = Column(String, default="email", nullable=False)  # 'email' | 'google'
+    needs_profile_completion = Column(Boolean, default=False)  # True for new Google users
     student = relationship("Student", back_populates="user", uselist=False, cascade="all, delete-orphan")
     admin = relationship("Admin", back_populates="user", uselist=False, cascade="all, delete-orphan")
     

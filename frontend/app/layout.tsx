@@ -6,6 +6,7 @@ import NotificationManager from '@/components/NotificationManager'
 import AuthInitializer from '@/components/AuthInitializer'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import GoogleAuthProvider from '@/components/GoogleAuthProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -37,11 +38,13 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          <AuthInitializer />
-          <Navbar />
-          {children}
-          <Footer />
-          <NotificationManager />
+          <GoogleAuthProvider>
+            <AuthInitializer />
+            <Navbar />
+            {children}
+            <Footer />
+            <NotificationManager />
+          </GoogleAuthProvider>
         </Providers>
       </body>
     </html>

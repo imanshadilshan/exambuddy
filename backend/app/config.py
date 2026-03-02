@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     PAYHERE_MERCHANT_SECRET: str = ""
     PAYHERE_MODE: str = "sandbox"
     PAYHERE_CURRENCY: str = "LKR"
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = ""
+
     
     # Email
     SMTP_HOST: str = "smtp.gmail.com"

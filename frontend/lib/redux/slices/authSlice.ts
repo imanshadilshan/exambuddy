@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
 import { login as apiLogin, register as apiRegister, getCurrentUser } from '@/lib/api/auth'
+import { googleLogin as apiGoogleLogin } from '@/lib/api/googleAuth'
 import apiClient from '@/lib/api/client'
 
 interface User {
@@ -17,6 +18,7 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
+  needsProfileCompletion: boolean
 }
 
 const initialState: AuthState = {
@@ -26,6 +28,7 @@ const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: false,
   error: null,
+  needsProfileCompletion: false,
 }
 
 // Async thunks
@@ -84,6 +87,23 @@ export const changePassword = createAsyncThunk(
   }
 )
 
+export const googleLoginThunk = createAsyncThunk(
+  'auth/googleLogin',
+  async (idToken: string, { rejectWithValue }) => {
+    try {
+      const response = await apiGoogleLogin(idToken)
+      return response
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail
+      const message =
+        typeof detail === 'string'
+          ? detail
+          : error?.message || 'Google login failed'
+      return rejectWithValue(message)
+    }
+  }
+)
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -93,6 +113,7 @@ const authSlice = createSlice({
       state.accessToken = null
       state.refreshToken = null
       state.isAuthenticated = false
+      state.needsProfileCompletion = false
       if (typeof window !== 'undefined') {
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
@@ -105,6 +126,9 @@ const authSlice = createSlice({
         localStorage.setItem('accessToken', action.payload.accessToken)
         localStorage.setItem('refreshToken', action.payload.refreshToken)
       }
+    },
+    clearNeedsProfileCompletion: (state) => {
+      state.needsProfileCompletion = false
     },
   },
   extraReducers: (builder) => {
@@ -165,8 +189,24 @@ const authSlice = createSlice({
         state.isLoading = false
         state.error = action.payload as string
       })
+      // Google Login
+      .addCase(googleLoginThunk.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(googleLoginThunk.fulfilled, (state, action) => {
+        state.isLoading = false
+        state.accessToken = action.payload.access_token
+        state.refreshToken = action.payload.refresh_token
+        state.isAuthenticated = true
+        state.needsProfileCompletion = action.payload.needs_profile_completion
+      })
+      .addCase(googleLoginThunk.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload as string
+      })
   },
 })
 
-export const { logout, setCredentials } = authSlice.actions
+export const { logout, setCredentials, clearNeedsProfileCompletion } = authSlice.actions
 export default authSlice.reducer

@@ -11,11 +11,12 @@ from app.core.security import (
 )
 from app.core.cache import cache
 from app.core.session import session_manager
+from app.core.google_auth import verify_google_token
 from app.models.user import User, UserRole
 from app.models.student import Student
 from app.models.admin import Admin
 from app.schemas.auth import StudentRegister, UserLogin
-from app.api.v1.auth import ProfileUpdateRequest, PasswordChangeRequest
+from app.api.v1.auth import ProfileUpdateRequest, PasswordChangeRequest, CompleteGoogleProfileRequest
 
 
 class AuthService:
@@ -63,8 +64,22 @@ class AuthService:
 
     async def login(self, credentials: UserLogin) -> dict:
         user = self.db.query(User).filter(User.email == credentials.email).first()
-        
-        if not user or not verify_password(credentials.password, user.password_hash):
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Google-only accounts have no password
+        if user.auth_provider == "google" and not user.password_hash:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This account uses Google Sign-In. Please click 'Continue with Google'."
+            )
+
+        if not verify_password(credentials.password, user.password_hash or ""):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -101,6 +116,115 @@ class AuthService:
             "refresh_token": refresh_token,
             "token_type": "bearer"
         }
+
+    async def google_login(self, id_token: str) -> dict:
+        """Verify Google ID token and return JWT tokens. Creates or retrieves user."""
+        google_info = verify_google_token(id_token)
+        if not google_info:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Google token."
+            )
+
+        google_id = google_info["google_id"]
+        email = google_info["email"]
+        full_name = google_info["full_name"]
+        picture = google_info["picture"]
+
+        # Try to find existing user by google_id first, then by email
+        user = self.db.query(User).filter(User.google_id == google_id).first()
+
+        if not user:
+            user = self.db.query(User).filter(User.email == email).first()
+
+        needs_profile = False
+
+        if user:
+            # Link google_id if this is an existing email/password user
+            if not user.google_id:
+                user.google_id = google_id
+                user.auth_provider = "google"
+
+            # Always sync the profile picture from Google
+            if user.student and picture:
+                user.student.profile_photo_url = picture
+
+            user.last_login = datetime.utcnow()
+            self.db.commit()
+        else:
+            # New user — create account and partial student profile
+            user = User(
+                email=email,
+                password_hash=None,  # Google-only accounts have no password
+                role=UserRole.STUDENT,
+                is_active=True,
+                is_verified=True,
+                google_id=google_id,
+                auth_provider="google",
+                needs_profile_completion=True,
+            )
+            self.db.add(user)
+            self.db.flush()
+
+            # Create a partial student profile with just the info Google provides
+            student = Student(
+                user_id=user.id,
+                full_name=full_name or email.split("@")[0],
+                phone_number="",
+                school="",
+                district="",
+                grade=11,  # Default, will be updated in profile completion
+                profile_photo_url=picture,
+                has_paid=False,
+            )
+            self.db.add(student)
+            self.db.commit()
+            needs_profile = True
+
+        self.db.refresh(user)
+
+        access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
+        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+        try:
+            await session_manager.create_session(
+                user_id=str(user.id),
+                session_data={
+                    "email": user.email,
+                    "role": user.role.value,
+                    "login_time": datetime.utcnow().isoformat()
+                }
+            )
+            await session_manager.set_user_active(str(user.id))
+        except Exception as e:
+            print(f"Redis session creation failed (google login): {e}")
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "needs_profile_completion": needs_profile or user.needs_profile_completion,
+        }
+
+    def complete_google_profile(
+        self,
+        data: "CompleteGoogleProfileRequest",
+        current_user: User,
+    ) -> dict:
+        """Finish the one-time profile-completion step for new Google users."""
+        student = self.db.query(Student).filter(Student.user_id == current_user.id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student profile not found")
+
+        student.phone_number = data.phone_number
+        student.school = data.school
+        student.district = data.district
+        student.grade = data.grade
+
+        current_user.needs_profile_completion = False
+        self.db.commit()
+
+        return {"message": "Profile completed successfully"}
 
     async def get_current_user_info(self, current_user: User) -> dict:
         cache_key = f"user_profile:{current_user.id}"
