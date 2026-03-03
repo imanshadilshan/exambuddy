@@ -281,7 +281,7 @@ export default function CourseOverviewPage() {
                           onClick={() => handlePurchaseExam(exam)}
                           className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
                         >
-                          Purchase — LKR {exam.price}
+                          Enroll Now
                         </button>
                       )}
                     </div>
