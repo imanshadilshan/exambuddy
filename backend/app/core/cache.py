@@ -5,7 +5,7 @@ import json
 import redis.asyncio as redis
 from typing import Optional, Any
 from functools import wraps
-from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 
 from app.config import settings
 
@@ -65,8 +65,8 @@ class RedisCache:
         
         try:
             value = await self.client.get(key)
-        except (RedisConnectionError, OSError) as e:
-            print(f"Cache get error: Redis connection failed - {e}")
+        except (RedisConnectionError, RedisTimeoutError, OSError, Exception) as e:
+            print(f"Cache get error: {e}")
             self.client = None
             return None
         if value:
@@ -116,7 +116,12 @@ class RedisCache:
         if not self.client:
             return False
         
-        return await self.client.exists(key) > 0
+        try:
+            return await self.client.exists(key) > 0
+        except Exception as e:
+            print(f"Cache exists error: {e}")
+            self.client = None
+            return False
     
     async def clear_pattern(self, pattern: str) -> int:
         """Delete all keys matching pattern"""
@@ -126,10 +131,15 @@ class RedisCache:
         if not self.client:
             return 0
         
-        keys = await self.client.keys(pattern)
-        if keys:
-            return await self.client.delete(*keys)
-        return 0
+        try:
+            keys = await self.client.keys(pattern)
+            if keys:
+                return await self.client.delete(*keys)
+            return 0
+        except Exception as e:
+            print(f"Cache clear_pattern error: {e}")
+            self.client = None
+            return 0
 
 
 # Global cache instance

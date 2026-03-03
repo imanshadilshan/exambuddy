@@ -11,6 +11,7 @@ interface Exam {
   duration_minutes: number
   total_questions: number
   price: number
+  scheduled_start?: string | null
 }
 
 interface ExamsState {

@@ -246,6 +246,24 @@ function ExamCard({ exam, onEnroll, onPurchase, onStart, enrolling }: ExamCardPr
           </p>
         </div>
 
+        {/* Scheduled start info */}
+        {exam.scheduled_start && (
+          <div className={`text-xs px-3 py-2 rounded-lg mb-3 flex items-center gap-2 ${
+            new Date(exam.scheduled_start) > new Date()
+              ? 'bg-orange-50 border border-orange-200 text-orange-700'
+              : 'bg-green-50 border border-green-200 text-green-700'
+          }`}>
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {new Date(exam.scheduled_start) > new Date() ? (
+              <span>Opens: {new Date(exam.scheduled_start).toLocaleString()}</span>
+            ) : (
+              <span>Opened: {new Date(exam.scheduled_start).toLocaleString()}</span>
+            )}
+          </div>
+        )}
+
         {exam.is_enrolled ? (
           <div>
             {exam.already_attempted ? (
@@ -270,12 +288,21 @@ function ExamCard({ exam, onEnroll, onPurchase, onStart, enrolling }: ExamCardPr
                 <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg text-sm mb-2">
                   ✓ Enrolled {exam.enrollment_type === 'course' ? '(via course)' : ''}
                 </div>
-                <button
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                  onClick={() => onStart(exam.id)}
-                >
-                  Start Exam
-                </button>
+                {exam.scheduled_start && new Date(exam.scheduled_start) > new Date() ? (
+                  <button
+                    disabled
+                    className="w-full px-4 py-2 bg-orange-100 text-orange-600 rounded-lg font-medium cursor-not-allowed border border-orange-200"
+                  >
+                    🕐 Exam not yet open
+                  </button>
+                ) : (
+                  <button
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    onClick={() => onStart(exam.id)}
+                  >
+                    Start Exam
+                  </button>
+                )}
               </div>
             )}
           </div>

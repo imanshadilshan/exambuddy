@@ -60,7 +60,7 @@ export default function Navbar() {
                     : 'text-teal-700 hover:text-teal-900 hover:bg-teal-50'
                 }`}
               >
-                My Courses
+                My Exams
               </Link>
             )}
           </div>
@@ -128,7 +128,7 @@ export default function Navbar() {
                   : 'text-teal-700 hover:bg-teal-50'
               }`}
             >
-              My Courses
+              My Exams
             </Link>
           )}
           {!isAuthenticated && (

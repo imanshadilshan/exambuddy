@@ -31,6 +31,7 @@ type Exam = {
   duration_minutes: number
   total_questions: number
   price: number
+  scheduled_start?: string | null
 }
 
 export default function CourseExamsPage() {
@@ -60,6 +61,7 @@ export default function CourseExamsPage() {
     duration_minutes: '',
     total_questions: '',
     price: '0',
+    scheduled_start: '',
   })
 
   const error = storeError || localError
@@ -206,6 +208,7 @@ export default function CourseExamsPage() {
         duration_minutes: totalDurationMinutes,
         total_questions: Math.floor(totalQuestions),
         price: Math.floor(price),
+        scheduled_start: examForm.scheduled_start ? new Date(examForm.scheduled_start).toISOString() : null,
       })).unwrap()
 
       setExamForm({
@@ -217,6 +220,7 @@ export default function CourseExamsPage() {
         duration_minutes: '',
         total_questions: '',
         price: '0',
+        scheduled_start: '',
       })
       setExamImageFile(null)
       setShowCreateModal(false)
@@ -239,6 +243,7 @@ export default function CourseExamsPage() {
       duration_minutes: '',
       total_questions: '',
       price: '0',
+      scheduled_start: '',
     })
     setExamImageFile(null)
     setShowCreateModal(true)
@@ -254,6 +259,10 @@ export default function CourseExamsPage() {
     setLocalError('')
     const hours = Math.floor(exam.duration_minutes / 60)
     const minutes = exam.duration_minutes % 60
+    // Convert ISO string to datetime-local format (YYYY-MM-DDTHH:mm)
+    const scheduledLocal = exam.scheduled_start
+      ? new Date(exam.scheduled_start).toISOString().slice(0, 16)
+      : ''
     setExamForm({
       title: exam.title,
       image_url: exam.image_url || '',
@@ -263,6 +272,7 @@ export default function CourseExamsPage() {
       duration_minutes: minutes > 0 ? String(minutes) : '',
       total_questions: String(exam.total_questions),
       price: String(exam.price || 0),
+      scheduled_start: scheduledLocal,
     })
     setExamImageFile(null)
     setRemoveExamImage(false)
@@ -387,6 +397,7 @@ export default function CourseExamsPage() {
           duration_minutes: totalDurationMinutes,
           total_questions: Math.floor(totalQuestions),
           price: Math.floor(price),
+          scheduled_start: examForm.scheduled_start ? new Date(examForm.scheduled_start).toISOString() : null,
         }
       })).unwrap()
 
@@ -492,6 +503,16 @@ export default function CourseExamsPage() {
                           <span className="font-medium text-gray-900">LKR {exam.price}</span>
                         )}
                       </p>
+                      {exam.scheduled_start ? (
+                        <p className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          <span className="text-xs">
+                            Starts: {new Date(exam.scheduled_start).toLocaleString()}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-xs text-green-600 font-medium">Available Anytime</p>
+                      )}
                     </div>
                     {exam.description && (
                       <p className="text-xs text-gray-600 mb-4 line-clamp-2">{exam.description}</p>
@@ -623,6 +644,17 @@ export default function CourseExamsPage() {
                   onChange={(e) => setExamForm((prev) => ({ ...prev, price: e.target.value }))}
                 />
                 <p className="text-xs text-gray-500">Set to 0 to make this exam free</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Exam Start Date & Time</label>
+                <input
+                  type="datetime-local"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  value={examForm.scheduled_start}
+                  onChange={(e) => setExamForm((prev) => ({ ...prev, scheduled_start: e.target.value }))}
+                />
+                <p className="text-xs text-gray-500">Leave empty to allow students to start anytime</p>
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200">
@@ -778,6 +810,17 @@ export default function CourseExamsPage() {
                   onChange={(e) => setExamForm((prev) => ({ ...prev, price: e.target.value }))}
                 />
                 <p className="text-xs text-gray-500">Set to 0 to make this exam free</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Exam Start Date & Time</label>
+                <input
+                  type="datetime-local"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  value={examForm.scheduled_start}
+                  onChange={(e) => setExamForm((prev) => ({ ...prev, scheduled_start: e.target.value }))}
+                />
+                <p className="text-xs text-gray-500">Leave empty to allow students to start anytime</p>
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200">

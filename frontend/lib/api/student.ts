@@ -30,12 +30,26 @@ export interface ExamWithAccess {
   already_attempted: boolean
   last_score: number | null
   last_total: number | null
+  scheduled_start: string | null
 }
 
 export interface EnrollmentResponse {
   message: string
   enrollment_id?: string
   enrollment_type?: string
+}
+
+export interface CourseExamItem {
+  id: string
+  title: string
+  duration_minutes: number
+  total_questions: number
+  image_url: string | null
+  price: number
+  scheduled_start: string | null
+  already_attempted: boolean
+  last_score: number | null
+  last_total: number | null
 }
 
 export interface EnrolledCourseItem {
@@ -49,6 +63,7 @@ export interface EnrolledCourseItem {
     price: number
   }
   enrolled_at: string
+  exams: CourseExamItem[]
 }
 
 export interface EnrolledExamItem {

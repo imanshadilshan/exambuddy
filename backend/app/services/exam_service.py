@@ -40,7 +40,8 @@ class ExamService:
             duration_minutes=payload.duration_minutes,
             total_questions=payload.total_questions,
             price=payload.price,
-            is_published=False,
+            scheduled_start=payload.scheduled_start,
+            is_published=payload.is_published,
         )
         self.db.add(exam)
         self.db.commit()
@@ -133,6 +134,7 @@ class ExamService:
                 "already_attempted": already_attempted,
                 "last_score": last_score,
                 "last_total": last_total,
+                "scheduled_start": exam.scheduled_start.isoformat() if exam.scheduled_start else None,
             })
 
         return result
@@ -186,6 +188,22 @@ class ExamService:
 
         if not course_enrollment and not exam_enrollment:
             raise HTTPException(status_code=403, detail="You must enroll in this exam first")
+
+        # ── Scheduled start enforcement ───────────────────────────────
+        if exam.scheduled_start:
+            sched = exam.scheduled_start
+            if sched.tzinfo is None:
+                sched = sched.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) < sched:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "not_started_yet": True,
+                        "scheduled_start": sched.isoformat(),
+                        "message": f"This exam opens on {sched.strftime('%Y-%m-%d %H:%M UTC')}"
+                    }
+                )
+        # ──────────────────────────────────────────────────────────────
 
         # ── One-attempt enforcement ────────────────────────────────────
         completed_attempt = self.db.query(ExamAttempt).filter(

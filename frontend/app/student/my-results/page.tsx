@@ -93,7 +93,7 @@ export default function MyResultsPage() {
             <h2 className="text-xl font-bold text-gray-900 mb-2">No results yet</h2>
             <p className="text-gray-500 mb-6">Complete an exam to see your results here</p>
             <Link href="/student/my-courses" className="px-6 py-3 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 transition-colors">
-              Go to My Courses
+              Go to My Exams
             </Link>
           </div>
         ) : (

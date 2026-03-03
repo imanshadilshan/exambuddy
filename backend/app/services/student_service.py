@@ -35,13 +35,35 @@ class StudentService:
 
         # Look up last completed attempt for each enrolled exam
         enrolled_exam_ids = [e.exam_id for e in exam_enrollments]
+
+        # ── Also collect all exams for enrolled courses ──────────────
+        enrolled_course_ids = [e.course_id for e in course_enrollments]
+        course_exams_map: dict = {}   # course_id -> list of Exam objects
+        all_course_exam_ids: list = []
+        if enrolled_course_ids:
+            course_exams = (
+                self.db.query(Exam)
+                .filter(
+                    Exam.course_id.in_(enrolled_course_ids),
+                    Exam.is_published == True,
+                )
+                .order_by(Exam.created_at)
+                .all()
+            )
+            for ex in course_exams:
+                cid = str(ex.course_id)
+                course_exams_map.setdefault(cid, []).append(ex)
+                all_course_exam_ids.append(ex.id)
+
+        # ── Fetch attempts for ALL relevant exam ids (standalone + course) ──
+        all_exam_ids = list(set(enrolled_exam_ids + all_course_exam_ids))
         last_attempts = {}
-        if enrolled_exam_ids:
+        if all_exam_ids:
             rows = (
                 self.db.query(ExamAttempt)
                 .filter(
                     ExamAttempt.user_id == current_user.id,
-                    ExamAttempt.exam_id.in_(enrolled_exam_ids),
+                    ExamAttempt.exam_id.in_(all_exam_ids),
                     ExamAttempt.status.in_([
                         ExamAttemptStatus.SUBMITTED,
                         ExamAttemptStatus.TIMEOUT,
@@ -55,6 +77,21 @@ class StudentService:
                 if eid not in last_attempts:
                     last_attempts[eid] = row
 
+        def _exam_dict(exam_obj):
+            eid = str(exam_obj.id)
+            return {
+                "id": eid,
+                "title": exam_obj.title,
+                "duration_minutes": exam_obj.duration_minutes,
+                "total_questions": exam_obj.total_questions,
+                "image_url": exam_obj.image_url,
+                "price": exam_obj.price,
+                "scheduled_start": exam_obj.scheduled_start.isoformat() if exam_obj.scheduled_start else None,
+                "already_attempted": eid in last_attempts,
+                "last_score": last_attempts[eid].marks_obtained if eid in last_attempts else None,
+                "last_total": last_attempts[eid].total_questions if eid in last_attempts else None,
+            }
+
         return {
             "courses": [
                 {
@@ -67,7 +104,11 @@ class StudentService:
                         "image_url": e.course.image_url,
                         "price": e.course.price
                     },
-                    "enrolled_at": e.enrolled_at
+                    "enrolled_at": e.enrolled_at,
+                    "exams": [
+                        _exam_dict(ex)
+                        for ex in course_exams_map.get(str(e.course_id), [])
+                    ],
                 }
                 for e in course_enrollments
             ],

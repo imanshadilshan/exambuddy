@@ -10,7 +10,7 @@ import { login, fetchCurrentUser, googleLoginThunk } from '@/lib/redux/slices/au
 export default function LoginPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
-  const { isAuthenticated, isLoading, error, user } = useAppSelector((state) => state.auth)
+  const { isAuthenticated, isLoading, error, user, needsProfileCompletion } = useAppSelector((state) => state.auth)
 
   const [formData, setFormData] = useState({
     email: '',
@@ -20,14 +20,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Redirect based on role
-      if (user.role === 'admin') {
+      if (needsProfileCompletion) {
+        router.push('/auth/complete-profile')
+      } else if (user.role === 'admin') {
         router.push('/admin/dashboard')
       } else {
         router.push('/')
       }
     }
-  }, [isAuthenticated, user, router])
+  }, [isAuthenticated, user, needsProfileCompletion, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
