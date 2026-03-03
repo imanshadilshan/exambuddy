@@ -151,7 +151,7 @@ export default function CourseOverviewPage() {
 
       {/* Course Content - Exams List */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h2 className="text-2xl font-bold text-gray-900 mb-8">Course Content</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-8">Exams</h2>
 
         <div className="space-y-6">
           {exams.length === 0 ? (
@@ -163,108 +163,131 @@ export default function CourseOverviewPage() {
               <p className="text-gray-500">Exams for this course haven't been published yet.</p>
             </div>
           ) : (
-            <div className="grid gap-6">
-              {exams.map((exam) => (
-                <div key={exam.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row">
-                  {exam.image_url && (
-                    <div className="md:w-48 h-48 md:h-auto flex-shrink-0">
-                      <img src={exam.image_url} alt={exam.title} className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  
-                  <div className="p-6 flex-grow flex flex-col justify-between">
-                    <div>
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-xl font-bold text-gray-900">{exam.title}</h3>
-                        {exam.is_enrolled && (
-                          <span className="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Enrolled
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {exams.map((exam) => {
+                const isScheduledFuture = exam.scheduled_start && new Date(exam.scheduled_start) > new Date()
+                const isAccessible = exam.is_enrolled || course.is_enrolled
+
+                return (
+                  <div
+                    key={exam.id}
+                    className={`group bg-white border rounded-xl overflow-hidden hover:shadow-md transition-all flex flex-col ${
+                      isScheduledFuture ? 'border-orange-200 opacity-90' : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    {/* Thumbnail */}
+                    {exam.image_url && (
+                      <div className="h-36 w-full overflow-hidden">
+                        <img
+                          src={exam.image_url}
+                          alt={exam.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    )}
+
+                    <div className="p-4 flex-1 flex flex-col">
+                      {/* Title + enrolled badge */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900 text-base leading-snug line-clamp-2 group-hover:text-blue-700 transition-colors">
+                          {exam.title}
+                        </h3>
+                        {exam.already_attempted && (
+                          <span className="shrink-0 px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded text-xs font-semibold uppercase tracking-wide">
+                            Done
                           </span>
                         )}
                       </div>
-                      
-                      {exam.description && (
-                        <p className="text-gray-600 mb-4 line-clamp-2">{exam.description}</p>
+
+                      {/* Score if attempted */}
+                      {exam.already_attempted && exam.last_score !== null && exam.last_total !== null && (
+                        <p className="text-xs text-blue-600 font-semibold mb-2">
+                          Score: {exam.last_score}/{exam.last_total} ({Math.round((exam.last_score / exam.last_total) * 100)}%)
+                        </p>
                       )}
-                      
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-500 mb-4">
-                        <div className="flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+
+                      {/* Scheduled date */}
+                      {exam.scheduled_start && (
+                        <p className={`text-xs flex items-center gap-1 mb-2 ${isScheduledFuture ? 'text-orange-500 font-medium' : 'text-gray-400'}`}>
+                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                          {exam.duration_minutes} mins
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          {isScheduledFuture ? 'Opens: ' : 'Date: '}
+                          {new Date(exam.scheduled_start).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
+                      )}
+
+                      {/* Meta: questions + duration */}
+                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-auto mb-4">
+                        <span className="flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          {exam.total_questions} questions
-                        </div>
-                        
-                        {exam.already_attempted && exam.last_score !== null && exam.last_total !== null && (
-                          <div className="flex items-center gap-1 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                            </svg>
-                            Score: {exam.last_score}/{exam.last_total}
-                          </div>
-                        )}
-                        
-                        {exam.scheduled_start && new Date(exam.scheduled_start) > new Date() && (
-                          <div className="flex items-center gap-1 font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            Starts: {new Date(exam.scheduled_start).toLocaleString()}
-                          </div>
+                          {exam.total_questions} Qs
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {exam.duration_minutes} min
+                        </span>
+                        {!isAccessible && (
+                          <span className="ml-auto font-semibold text-gray-700">
+                            {exam.is_free ? <span className="text-green-600">FREE</span> : `LKR ${exam.price}`}
+                          </span>
                         )}
                       </div>
-                    </div>
-                    
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                      <div className="text-lg font-bold text-gray-900">
-                        {exam.is_free ? (
-                          <span className="text-green-600">FREE</span>
-                        ) : (
-                          <span>LKR {exam.price}</span>
-                        )}
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        {exam.is_enrolled || course.is_enrolled ? (
+
+                      {/* CTA button */}
+                      {isAccessible ? (
+                        isScheduledFuture ? (
+                          <div className="bg-orange-50 text-orange-700 border border-orange-100 px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Not open yet
+                          </div>
+                        ) : exam.already_attempted ? (
                           <button
                             onClick={() => handleStartExam(exam.id)}
-                            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
+                            className="w-full bg-green-50 text-green-700 border border-green-200 px-3 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 hover:bg-green-600 hover:text-white transition-colors"
                           >
-                            {exam.already_attempted ? 'Retake Exam' : 'Start Exam'}
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            See Result
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStartExam(exam.id)}
+                            className="w-full bg-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 group-hover:bg-blue-600 group-hover:text-white transition-colors"
+                          >
+                            Start Exam
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                             </svg>
                           </button>
-                        ) : exam.is_free ? (
-                          <button
-                            onClick={() => handleEnrollFreeExam(exam.id)}
-                            disabled={enrolling === exam.id}
-                            className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
-                          >
-                            {enrolling === exam.id ? 'Enrolling...' : 'Enroll for Free'}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handlePurchaseExam(exam)}
-                            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
-                          >
-                            Purchase Exam
-                          </button>
-                        )}
-                      </div>
+                        )
+                      ) : exam.is_free ? (
+                        <button
+                          onClick={() => handleEnrollFreeExam(exam.id)}
+                          disabled={enrolling === exam.id}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                        >
+                          {enrolling === exam.id ? 'Enrolling...' : 'Enroll for Free'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handlePurchaseExam(exam)}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
+                        >
+                          Purchase — LKR {exam.price}
+                        </button>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
