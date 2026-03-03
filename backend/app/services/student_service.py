@@ -121,7 +121,8 @@ class StudentService:
                         "duration_minutes": e.exam.duration_minutes,
                         "total_questions": e.exam.total_questions,
                         "image_url": e.exam.image_url,
-                        "price": e.exam.price
+                        "price": e.exam.price,
+                        "scheduled_start": e.exam.scheduled_start.isoformat() if e.exam.scheduled_start else None,
                     },
                     "enrolled_at": e.enrolled_at,
                     "already_attempted": str(e.exam_id) in last_attempts,

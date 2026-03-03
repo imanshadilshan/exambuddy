@@ -408,9 +408,9 @@ export default function QuestionsPage() {
 
       const result = await dispatch(importQuestionsCSV({ examId, file: csvFile })).unwrap()
       
-      let message = 'Questions imported successfully'
-      if (result && Array.isArray(result)) {
-        message = `${result.length} question(s) imported successfully`
+      let message = `✅ ${result.questions_created ?? 0} question(s) imported successfully`
+      if (result.errors && result.errors.length > 0) {
+        message += `\n\n⚠️ ${result.errors.length} row(s) skipped:\n` + result.errors.join('\n')
       }
       
       setSuccess(message)

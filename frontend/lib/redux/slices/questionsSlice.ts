@@ -83,10 +83,13 @@ export const importQuestionsCSV = createAsyncThunk(
   'questions/importQuestionsCSV',
   async ({ examId, file }: { examId: string; file: File }, { rejectWithValue }) => {
     try {
-      const result = await adminApi.importQuestionsCSV(examId, file)
-      return result.questions || []
+      // Backend returns: { message, questions_created, errors }
+      return await adminApi.importQuestionsCSV(examId, file)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to import questions from CSV')
+      const detail = error?.response?.data?.detail
+      return rejectWithValue(
+        typeof detail === 'string' ? detail : (detail || 'Failed to import questions from CSV')
+      )
     }
   }
 )
@@ -164,12 +167,9 @@ const questionsSlice = createSlice({
         state.isLoading = true
         state.error = null
       })
-      .addCase(importQuestionsCSV.fulfilled, (state, action: PayloadAction<Question[]>) => {
+      .addCase(importQuestionsCSV.fulfilled, (state) => {
         state.isLoading = false
-        // Append imported questions; the page will re-fetch to get the canonical list
-        if (action.payload && action.payload.length > 0) {
-          state.questions = [...state.questions, ...action.payload]
-        }
+        // Questions list will be refreshed by the page via fetchQuestions dispatch
       })
       .addCase(importQuestionsCSV.rejected, (state, action) => {
         state.isLoading = false

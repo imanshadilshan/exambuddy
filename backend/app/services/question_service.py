@@ -205,9 +205,6 @@ class QuestionService:
             for idx, row in enumerate(csv_reader, start=1):
                 try:
                     required_fields = ['question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
-                    if has_five_options:
-                        required_fields.append('option_e')
-                        
                     missing_fields = [f for f in required_fields if f not in row or not row[f].strip()]
                     
                     if missing_fields:
@@ -215,9 +212,14 @@ class QuestionService:
                         continue
 
                     correct_answer = row['correct_answer'].strip().upper()
-                    valid_answers = ['A', 'B', 'C', 'D', 'E'] if has_five_options else ['A', 'B', 'C', 'D']
+
+                    # option_e is always optional: use it only when the column exists and has content
+                    option_e_value = row.get('option_e', '').strip()
+                    row_has_five = bool(option_e_value)
+
+                    valid_answers = ['A', 'B', 'C', 'D', 'E'] if row_has_five else ['A', 'B', 'C', 'D']
                     if correct_answer not in valid_answers:
-                        errors.append(f"Row {idx}: correct_answer must be {' or '.join(valid_answers)}")
+                        errors.append(f"Row {idx}: correct_answer must be one of {', '.join(valid_answers)}")
                         continue
 
                     question = Question(
@@ -236,7 +238,7 @@ class QuestionService:
                         ('D', row['option_d'].strip(), 4),
                     ]
                     
-                    if has_five_options:
+                    if row_has_five:
                         options_data.append(('E', row['option_e'].strip(), 5))
 
                     for letter, text, order in options_data:

@@ -96,6 +96,10 @@ export const startExam = createAsyncThunk(
       if (error?.response?.status === 409 && detail?.already_attempted) {
         return rejectWithValue({ alreadyAttempted: true, ...detail })
       }
+      // 403 with not_started_yet = exam schedule hasn't opened yet
+      if (error?.response?.status === 403 && detail?.not_started_yet) {
+        return rejectWithValue({ notStartedYet: true, scheduledStart: detail.scheduled_start, message: detail.message })
+      }
       return rejectWithValue(
         typeof detail === 'string' ? detail : 'Failed to start exam'
       )

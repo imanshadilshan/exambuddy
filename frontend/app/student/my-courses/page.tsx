@@ -31,7 +31,9 @@ export default function MyExamsPage() {
 
   // Extract all unattempted exams from both standalone enrollments and course enrollments
   const availableExams = useMemo(() => {
-    const unattempted: Array<{
+    // Use a Map keyed by exam ID so course enrollments (which carry subject info) overwrite
+    // standalone enrollments, preventing duplicates when the same exam exists in both.
+    const examMap = new Map<string, {
       id: string
       title: string
       subject: string | null
@@ -39,33 +41,32 @@ export default function MyExamsPage() {
       duration_minutes: number
       scheduled_start: string | null
       image_url: string | null
-    }> = []
+    }>()
 
-    // 1. From standalone exams
+    // 1. From standalone exams (add first; may be overwritten by course entry below)
     if (enrollments?.exams) {
       enrollments.exams.forEach((item: EnrolledExamItem) => {
         if (!item.already_attempted) {
-          unattempted.push({
+          examMap.set(item.exam.id, {
             id: item.exam.id,
             title: item.exam.title,
             subject: null,
             total_questions: item.exam.total_questions,
             duration_minutes: item.exam.duration_minutes,
-            scheduled_start: null, // Note: scheduled_start is not currently returned for standalone enrolled exams from the API without an update, 
-                                   // but the backend handles access control anyway.
+            scheduled_start: (item.exam as any).scheduled_start ?? null,
             image_url: item.exam.image_url,
           })
         }
       })
     }
 
-    // 2. From course exams
+    // 2. From course exams (overwrite standalone entry if same exam ID — course has richer info)
     if (enrollments?.courses) {
       enrollments.courses.forEach((courseItem) => {
         if (courseItem.exams) {
           courseItem.exams.forEach((examItem: CourseExamItem) => {
             if (!examItem.already_attempted) {
-              unattempted.push({
+              examMap.set(examItem.id, {
                 id: examItem.id,
                 title: examItem.title,
                 subject: courseItem.course.subject,
@@ -80,7 +81,7 @@ export default function MyExamsPage() {
       })
     }
 
-    return unattempted
+    return Array.from(examMap.values())
   }, [enrollments])
 
   if (authLoading || loadingAttempts || loadingEnrollments) {
@@ -153,7 +154,7 @@ export default function MyExamsPage() {
                         key={exam.id}
                         href={`/student/exams/${exam.id}`}
                         className={`group bg-white border rounded-xl overflow-hidden hover:shadow-md transition-all flex flex-col ${
-                          isScheduledFuture ? 'border-gray-200 opacity-90' : 'border-gray-200 hover:border-blue-300'
+                          isScheduledFuture ? 'border-orange-200 opacity-90' : 'border-gray-200 hover:border-blue-300'
                         }`}
                       >
                         {exam.image_url && (
@@ -166,7 +167,16 @@ export default function MyExamsPage() {
                             {exam.title}
                           </h3>
                           {exam.subject && (
-                            <p className="text-sm font-medium text-gray-500 mb-3">{exam.subject}</p>
+                            <p className="text-sm font-medium text-gray-500 mb-2">{exam.subject}</p>
+                          )}
+
+                          {/* Always show scheduled date/time if set */}
+                          {exam.scheduled_start && (
+                            <p className={`text-xs flex items-center gap-1 mb-2 ${isScheduledFuture ? 'text-orange-500 font-medium' : 'text-gray-400'}`}>
+                              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                              {isScheduledFuture ? 'Opens: ' : 'Date: '}
+                              {new Date(exam.scheduled_start).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                            </p>
                           )}
                           
                           <div className="flex items-center gap-3 text-xs text-gray-500 mb-4 mt-auto">
@@ -183,8 +193,8 @@ export default function MyExamsPage() {
                           {/* Status / Call to Action */}
                           {isScheduledFuture ? (
                             <div className="mt-2 bg-orange-50 text-orange-700 px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border border-orange-100">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                              Opens: {new Date(exam.scheduled_start!).toLocaleString()}
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                              Not open yet
                             </div>
                           ) : (
                             <div className="mt-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 group-hover:bg-blue-600 group-hover:text-white transition-colors">

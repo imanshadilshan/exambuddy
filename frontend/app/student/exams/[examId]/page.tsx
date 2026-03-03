@@ -34,6 +34,7 @@ export default function StudentExamPage() {
   const [answers, setAnswers] = useState<Record<string, string | null>>({})
   const [isPageVisible, setIsPageVisible] = useState(true)
   const [visibilityWarnings, setVisibilityWarnings] = useState(0)
+  const [notStartedYet, setNotStartedYet] = useState<{ scheduledStart: string; message: string } | null>(null)
 
   const autoSubmitTriggered = useRef(false)
 
@@ -118,6 +119,8 @@ export default function StudentExamPage() {
             } finally {
               setLoadingPastResult(false)
             }
+          } else if (payload?.notStartedYet) {
+            setNotStartedYet({ scheduledStart: payload.scheduledStart, message: payload.message })
           }
         }
       } catch (err: any) {
@@ -223,6 +226,38 @@ export default function StudentExamPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {typeof error === 'string' ? error : 'Something went wrong. Please try again.'}
+        </div>
+      </div>
+    )
+  }
+
+  // Show 'not open yet' screen
+  if (notStartedYet) {
+    const opensAt = new Date(notStartedYet.scheduledStart)
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white border border-orange-200 rounded-2xl p-8 max-w-md w-full text-center shadow-sm">
+          <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-5">
+            <svg className="w-8 h-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Exam Not Open Yet</h2>
+          <p className="text-gray-500 mb-4">{notStartedYet.message}</p>
+          <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 mb-6">
+            <p className="text-sm text-orange-700 font-semibold">
+              Opens on: {opensAt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+            <p className="text-sm text-orange-600">
+              at {opensAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}
+            </p>
+          </div>
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-black transition-colors"
+          >
+            ← Go Back
+          </button>
         </div>
       </div>
     )
