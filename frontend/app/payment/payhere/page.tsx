@@ -2,7 +2,8 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import * as paymentApi from '@/lib/api/payment'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchPayHereConfigThunk, clearCurrentConfig, clearPaymentError } from '@/lib/redux/slices/paymentSlice'
 
 declare global {
   interface Window {
@@ -27,14 +28,16 @@ function PayHereContent() {
   const searchParams = useSearchParams()
   const paymentId = searchParams?.get('payment_id')
 
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [config, setConfig] = useState<paymentApi.PayHereConfig | null>(null)
+  const dispatch = useAppDispatch()
+  const { currentPaymentConfig: config, isLoading: loading, error } = useAppSelector((state) => state.payment)
+
+  const [localError, setLocalError] = useState('')
+  const [localLoading, setLocalLoading] = useState(true)
 
   useEffect(() => {
     if (!paymentId) {
-      setError('Payment ID is required')
-      setLoading(false)
+      setLocalError('Payment ID is required')
+      setLocalLoading(false)
       return
     }
 
@@ -43,9 +46,8 @@ function PayHereContent() {
 
   const loadPayHereConfig = async () => {
     try {
-      setLoading(true)
-      const paymentConfig = await paymentApi.getPayHereConfig(paymentId!)
-      setConfig(paymentConfig)
+      dispatch(clearPaymentError())
+      await dispatch(fetchPayHereConfigThunk(paymentId!)).unwrap()
 
       // Load PayHere script
       const script = document.createElement('script')
@@ -53,11 +55,9 @@ function PayHereContent() {
       script.async = true
       script.onload = () => {
         console.log('PayHere script loaded')
-        setLoading(false)
       }
       script.onerror = () => {
-        setError('Failed to load payment gateway')
-        setLoading(false)
+        console.error('Failed to load payment gateway')
       }
       document.body.appendChild(script)
 
@@ -65,14 +65,13 @@ function PayHereContent() {
         document.body.removeChild(script)
       }
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Failed to load payment configuration')
-      setLoading(false)
+      // Error handled by Redux
     }
   }
 
   const initiatePayHerePayment = () => {
     if (!config || !window.payhere) {
-      setError('Payment gateway not ready')
+      console.error('Payment gateway not ready')
       return
     }
 
@@ -106,41 +105,37 @@ function PayHereContent() {
       router.push('/payment/cancel')
     }
 
-    window.payhere.onError = function onError(error: string) {
-      console.log('Payment error:', error)
-      setError(error)
+    window.payhere.onError = function onError(errorMsg: string) {
+      console.error('Payment error:', errorMsg)
+      setLocalError(`Payment failed: ${errorMsg}`)
     }
 
     window.payhere.startPayment(payment)
   }
 
-  if (loading) {
+  if (loading || localLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-teal-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading payment gateway...</p>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mb-4"></div>
+        <p className="text-gray-600">Preparing secure payment gateway...</p>
       </div>
     )
   }
 
-  if (error) {
+  if (error || localError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-xl border border-red-200 p-6">
-          <div className="text-center mb-4">
-            <svg className="w-16 h-16 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Payment Error</h2>
-            <p className="text-red-600">{error}</p>
-          </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md w-full text-center">
+          <svg className="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <h2 className="text-lg font-bold text-red-800 mb-2">Payment Setup Failed</h2>
+          <p className="text-red-600 mb-6">{error || localError}</p>
           <button
-            onClick={() => router.push('/dashboard')}
-            className="w-full px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-black font-semibold"
+            onClick={() => router.back()}
+            className="px-6 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium transition-colors"
           >
-            Back to Dashboard
+            Go Back
           </button>
         </div>
       </div>

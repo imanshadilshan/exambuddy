@@ -2,8 +2,9 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import * as paymentApi from '@/lib/api/payment'
-import { useAppSelector } from '@/lib/redux/hooks'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { initiatePaymentThunk, clearPaymentError } from '@/lib/redux/slices/paymentSlice'
+import { PaymentInitiateRequest, PaymentResponse } from '@/lib/api/payment'
 
 export default function PaymentPage() {
   return (
@@ -20,12 +21,14 @@ export default function PaymentPage() {
 function PaymentContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const dispatch = useAppDispatch()
+  
   const { user } = useAppSelector((state) => state.auth)
+  const { isLoading: loading, error } = useAppSelector((state) => state.payment)
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'payhere' | 'bank_slip'>('payhere')
-  const [payment, setPayment] = useState<paymentApi.PaymentResponse | null>(null)
+  const [payment, setPayment] = useState<PaymentResponse | null>(null)
+  const [localError, setLocalError] = useState('')
 
   // Get parameters from URL
   const type = searchParams?.get('type') as 'course' | 'exam'
@@ -35,21 +38,21 @@ function PaymentContent() {
 
   useEffect(() => {
     if (!type || !itemId) {
-      setError('Invalid payment parameters')
+      setLocalError('Invalid payment parameters')
     }
   }, [type, itemId])
 
   const handleInitiatePayment = async () => {
     if (!type || !itemId) {
-      setError('Missing required payment information')
+      setLocalError('Missing required payment information')
       return
     }
 
     try {
-      setLoading(true)
-      setError('')
+      dispatch(clearPaymentError())
+      setLocalError('')
 
-      const paymentData: paymentApi.PaymentInitiateRequest = {
+      const paymentData: PaymentInitiateRequest = {
         payment_type: type,
         payment_method: paymentMethod
       }
@@ -60,7 +63,7 @@ function PaymentContent() {
         paymentData.exam_id = itemId
       }
 
-      const createdPayment = await paymentApi.initiatePayment(paymentData)
+      const createdPayment = await dispatch(initiatePaymentThunk(paymentData)).unwrap()
       setPayment(createdPayment)
 
       // Redirect based on payment method
@@ -70,17 +73,16 @@ function PaymentContent() {
         router.push(`/payment/bank-slip?payment_id=${createdPayment.id}`)
       }
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Failed to initiate payment')
-    } finally {
-      setLoading(false)
+      // Handled by Redux natively if backend error, or local fallback
+      if (err?.message) setLocalError(err.message)
     }
   }
 
-  if (error && !type) {
+  if ((error || localError) && !type) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg max-w-md">
-          {error}
+          {error || localError}
         </div>
       </div>
     )
@@ -170,9 +172,9 @@ function PaymentContent() {
             </div>
           </div>
 
-          {error && (
+          {(error || localError) && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
-              {error}
+              {error || localError}
             </div>
           )}
 

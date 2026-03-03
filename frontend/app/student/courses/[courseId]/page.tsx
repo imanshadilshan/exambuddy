@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { fetchCourseOverview, fetchCourseExams } from '@/lib/redux/slices/coursesSlice'
-import * as studentApi from '@/lib/api/student'
+import { fetchCourseOverview, fetchCourseExams, enrollFreeExamThunk } from '@/lib/redux/slices/coursesSlice'
+import { ExamWithAccess } from '@/lib/api/student'
 
 export default function CourseOverviewPage() {
   const params = useParams()
@@ -31,17 +31,17 @@ export default function CourseOverviewPage() {
       }
 
       setEnrolling(examId)
-      await studentApi.enrollFreeExam(examId)
+      await dispatch(enrollFreeExamThunk(examId)).unwrap()
       // Reload exams to update enrollment status
       dispatch(fetchCourseExams(courseId))
     } catch (err: any) {
-      alert(err.message || 'Failed to enroll in exam')
+      alert(err || 'Failed to enroll in exam')
     } finally {
       setEnrolling(null)
     }
   }
 
-  const handlePurchaseExam = (exam: studentApi.ExamWithAccess) => {
+  const handlePurchaseExam = (exam: ExamWithAccess) => {
     router.push(`/payment?type=exam&id=${exam.id}&name=${encodeURIComponent(exam.title)}&amount=${exam.price}`)
   }
 
@@ -98,17 +98,15 @@ export default function CourseOverviewPage() {
               )}
             </div>
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded">
-                  Grade {course.grade}
-                </span>
-                <span className="px-3 py-1 bg-gray-100 text-gray-800 text-sm font-medium rounded">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded">
                   {course.subject}
                 </span>
+                <span className="bg-gray-100 text-gray-800 text-xs font-semibold px-2.5 py-0.5 rounded">
+                  Grade {course.grade}
+                </span>
               </div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                {course.title}
-              </h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-4">{course.title}</h1>
               {course.description && (
                 <p className="text-gray-600 mb-6">{course.description}</p>
               )}
@@ -125,203 +123,151 @@ export default function CourseOverviewPage() {
                       )}
                     </p>
                   </div>
-                  {course.is_enrolled ? (
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-100 text-green-800 border border-green-300 rounded-lg font-medium text-sm">
-                        ✓ Already Enrolled
-                      </span>
-                      <span className="text-xs text-gray-500">You have full access to this course</span>
-                    </div>
-                  ) : course.price > 0 ? (
-                    <button
-                      onClick={handlePurchaseCourse}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                    >
-                      Purchase Full Course
-                    </button>
-                  ) : null}
                 </div>
-                <p className="text-sm text-gray-500">
-                  {course.is_enrolled
-                    ? `You have access to all ${exams.length} exams in this course`
-                    : `Get access to all ${exams.length} exams in this course`}
-                </p>
+
+                {course.is_enrolled ? (
+                  <button
+                    disabled
+                    className="w-full py-3 px-4 bg-green-100 text-green-800 rounded-lg font-bold flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Enrolled
+                  </button>
+                ) : (
+                  <button
+                    onClick={handlePurchaseCourse}
+                    className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-colors"
+                  >
+                    Enroll in Full Course
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Exams Section */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Free Exams */}
-        {freeExams.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Free Exams
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {freeExams.map((exam) => (
-                <ExamCard
-                  key={exam.id}
-                  exam={exam}
-                  onEnroll={handleEnrollFreeExam}
-                  onPurchase={handlePurchaseExam}
-                  onStart={handleStartExam}
-                  enrolling={enrolling === exam.id}
-                />
-              ))}
+      {/* Course Content - Exams List */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <h2 className="text-2xl font-bold text-gray-900 mb-8">Course Content</h2>
+
+        <div className="space-y-6">
+          {exams.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+              <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-1">No exams yet</h3>
+              <p className="text-gray-500">Exams for this course haven't been published yet.</p>
             </div>
-          </section>
-        )}
-
-        {/* Paid Exams */}
-        {paidExams.length > 0 && (
-          <section>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Paid Exams
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {paidExams.map((exam) => (
-                <ExamCard
-                  key={exam.id}
-                  exam={exam}
-                  onEnroll={handleEnrollFreeExam}
-                  onPurchase={handlePurchaseExam}
-                  onStart={handleStartExam}
-                  enrolling={enrolling === exam.id}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {exams.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No exams available for this course yet</p>
-          </div>
-        )}
-      </main>
-    </div>
-  )
-}
-
-interface ExamCardProps {
-  exam: studentApi.ExamWithAccess
-  onEnroll: (examId: string) => void
-  onPurchase: (exam: studentApi.ExamWithAccess) => void
-  onStart: (examId: string) => void
-  enrolling: boolean
-}
-
-function ExamCard({ exam, onEnroll, onPurchase, onStart, enrolling }: ExamCardProps) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-      {exam.image_url && (
-        <img
-          src={exam.image_url}
-          alt={exam.title}
-          className="w-full h-40 object-cover"
-        />
-      )}
-      <div className="p-4">
-        <h3 className="font-semibold text-gray-900 mb-2">{exam.title}</h3>
-        {exam.description && (
-          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-            {exam.description}
-          </p>
-        )}
-        <div className="text-xs text-gray-600 mb-3 space-y-1">
-          <p>Duration: {exam.duration_minutes} minutes</p>
-          <p>Questions: {exam.total_questions}</p>
-          <p className="flex items-center gap-2">
-            Price:
-            {exam.is_free ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                FREE
-              </span>
-            ) : (
-              <span className="font-medium text-gray-900">LKR {exam.price}</span>
-            )}
-          </p>
-        </div>
-
-        {/* Scheduled start info */}
-        {exam.scheduled_start && (
-          <div className={`text-xs px-3 py-2 rounded-lg mb-3 flex items-center gap-2 ${
-            new Date(exam.scheduled_start) > new Date()
-              ? 'bg-orange-50 border border-orange-200 text-orange-700'
-              : 'bg-green-50 border border-green-200 text-green-700'
-          }`}>
-            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            {new Date(exam.scheduled_start) > new Date() ? (
-              <span>Opens: {new Date(exam.scheduled_start).toLocaleString()}</span>
-            ) : (
-              <span>Opened: {new Date(exam.scheduled_start).toLocaleString()}</span>
-            )}
-          </div>
-        )}
-
-        {exam.is_enrolled ? (
-          <div>
-            {exam.already_attempted ? (
-              <div className="space-y-2">
-                <div className="bg-gray-100 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
-                  <span>✓ Completed</span>
-                  {exam.last_score !== null && exam.last_total !== null && exam.last_total > 0 && (
-                    <span className="ml-auto font-semibold">
-                      {Math.round((exam.last_score / exam.last_total) * 100)}%
-                    </span>
+          ) : (
+            <div className="grid gap-6">
+              {exams.map((exam) => (
+                <div key={exam.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row">
+                  {exam.image_url && (
+                    <div className="md:w-48 h-48 md:h-auto flex-shrink-0">
+                      <img src={exam.image_url} alt={exam.title} className="w-full h-full object-cover" />
+                    </div>
                   )}
+                  
+                  <div className="p-6 flex-grow flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="text-xl font-bold text-gray-900">{exam.title}</h3>
+                        {exam.is_enrolled && (
+                          <span className="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Enrolled
+                          </span>
+                        )}
+                      </div>
+                      
+                      {exam.description && (
+                        <p className="text-gray-600 mb-4 line-clamp-2">{exam.description}</p>
+                      )}
+                      
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-500 mb-4">
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {exam.duration_minutes} mins
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {exam.total_questions} questions
+                        </div>
+                        
+                        {exam.already_attempted && exam.last_score !== null && exam.last_total !== null && (
+                          <div className="flex items-center gap-1 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                            </svg>
+                            Score: {exam.last_score}/{exam.last_total}
+                          </div>
+                        )}
+                        
+                        {exam.scheduled_start && new Date(exam.scheduled_start) > new Date() && (
+                          <div className="flex items-center gap-1 font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Starts: {new Date(exam.scheduled_start).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                      <div className="text-lg font-bold text-gray-900">
+                        {exam.is_free ? (
+                          <span className="text-green-600">FREE</span>
+                        ) : (
+                          <span>LKR {exam.price}</span>
+                        )}
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        {exam.is_enrolled || course.is_enrolled ? (
+                          <button
+                            onClick={() => handleStartExam(exam.id)}
+                            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
+                          >
+                            {exam.already_attempted ? 'Retake Exam' : 'Start Exam'}
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                            </svg>
+                          </button>
+                        ) : exam.is_free ? (
+                          <button
+                            onClick={() => handleEnrollFreeExam(exam.id)}
+                            disabled={enrolling === exam.id}
+                            className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                          >
+                            {enrolling === exam.id ? 'Enrolling...' : 'Enroll for Free'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handlePurchaseExam(exam)}
+                            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                          >
+                            Purchase Exam
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  disabled
-                  className="w-full px-4 py-2 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed"
-                >
-                  Already Attempted
-                </button>
-              </div>
-            ) : (
-              <div>
-                <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg text-sm mb-2">
-                  ✓ Enrolled {exam.enrollment_type === 'course' ? '(via course)' : ''}
-                </div>
-                {exam.scheduled_start && new Date(exam.scheduled_start) > new Date() ? (
-                  <button
-                    disabled
-                    className="w-full px-4 py-2 bg-orange-100 text-orange-600 rounded-lg font-medium cursor-not-allowed border border-orange-200"
-                  >
-                    🕐 Exam not yet open
-                  </button>
-                ) : (
-                  <button
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                    onClick={() => onStart(exam.id)}
-                  >
-                    Start Exam
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        ) : exam.is_free ? (
-          <button
-            onClick={() => onEnroll(exam.id)}
-            disabled={enrolling}
-            className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50"
-          >
-            {enrolling ? 'Enrolling...' : 'Enroll Free'}
-          </button>
-        ) : (
-          <button
-            onClick={() => onPurchase(exam)}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-          >
-            Purchase Exam
-          </button>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { fetchCurrentUser, clearNeedsProfileCompletion } from '@/lib/redux/slices/authSlice'
-import { completeGoogleProfile } from '@/lib/api/googleAuth'
+import { fetchCurrentUser, completeProfileThunk } from '@/lib/redux/slices/authSlice'
 
 const DISTRICTS = [
   'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
@@ -49,8 +48,7 @@ export default function CompleteProfilePage() {
     setLoading(true)
     setError('')
     try {
-      await completeGoogleProfile(form)
-      dispatch(clearNeedsProfileCompletion())
+      await dispatch(completeProfileThunk(form)).unwrap()
       await dispatch(fetchCurrentUser())
       router.push('/')
     } catch (err: any) {

@@ -2,17 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { fetchAdminBankSlipsThunk, verifyBankSlipThunk, clearPaymentError } from '@/lib/redux/slices/paymentSlice'
 import * as paymentApi from '@/lib/api/payment'
-import { useAppSelector } from '@/lib/redux/hooks'
 
 export default function AdminPaymentPage() {
   const router = useRouter()
+  const dispatch = useAppDispatch()
   const { user } = useAppSelector((state) => state.auth)
+  const { allSlips: bankSlips, isLoading: loading, error } = useAppSelector((state) => state.payment)
 
   const [activeTab, setActiveTab] = useState<'pending' | 'all'>('pending')
-  const [bankSlips, setBankSlips] = useState<paymentApi.BankSlipResponse[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [localError, setLocalError] = useState('')
   const [verifying, setVerifying] = useState<string | null>(null)
   const [selectedSlip, setSelectedSlip] = useState<paymentApi.BankSlipResponse | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
@@ -38,27 +39,24 @@ export default function AdminPaymentPage() {
 
   const loadBankSlips = async () => {
     try {
-      setLoading(true)
-      const data = activeTab === 'pending' 
-        ? await paymentApi.getPendingBankSlips()
-        : await paymentApi.getAllBankSlips()
-      setBankSlips(data)
+      dispatch(clearPaymentError())
+      const filter = activeTab === 'pending' ? 'pending' : undefined
+      await dispatch(fetchAdminBankSlipsThunk(filter)).unwrap()
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to load bank slips')
-    } finally {
-      setLoading(false)
+      setLocalError(err?.message || 'Failed to load bank slips')
     }
   }
 
   const handleVerify = async (slipId: string) => {
     try {
       setVerifying(slipId)
-      setError('')
-      await paymentApi.verifyBankSlip(slipId, { status: 'verified' })
-      await loadBankSlips()
+      setLocalError('')
+      await dispatch(verifyBankSlipThunk({ slipId, verification: { status: 'verified' } })).unwrap()
+      // Optional: reload all slips or let Redux slice update it
+      // The slice currently updates the item in `allSlips`
       setSelectedSlip(null)
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to verify bank slip')
+      setLocalError(err?.message || 'Failed to verify bank slip')
     } finally {
       setVerifying(null)
     }
@@ -66,22 +64,23 @@ export default function AdminPaymentPage() {
 
   const handleReject = async (slipId: string) => {
     if (!rejectionReason.trim()) {
-      setError('Please provide a rejection reason')
+      setLocalError('Please provide a rejection reason')
       return
     }
 
     try {
       setVerifying(slipId)
-      setError('')
-      await paymentApi.verifyBankSlip(slipId, { 
-        status: 'rejected',
-        rejection_reason: rejectionReason
-      })
-      await loadBankSlips()
+      setLocalError('')
+      
+      await dispatch(verifyBankSlipThunk({ 
+        slipId, 
+        verification: { status: 'rejected', rejection_reason: rejectionReason } 
+      })).unwrap()
+
       setSelectedSlip(null)
       setRejectionReason('')
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to reject bank slip')
+      setLocalError(err?.message || 'Failed to reject bank slip')
     } finally {
       setVerifying(null)
     }
@@ -133,9 +132,9 @@ export default function AdminPaymentPage() {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
                 <p className="text-gray-600">Loading submissions...</p>
               </div>
-            ) : error ? (
+            ) : error || localError ? (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                {error}
+                {error || localError}
               </div>
             ) : bankSlips.length === 0 ? (
               <div className="text-center py-8">
@@ -204,7 +203,7 @@ export default function AdminPaymentPage() {
                   onClick={() => {
                     setSelectedSlip(null)
                     setRejectionReason('')
-                    setError('')
+                    setLocalError('')
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
@@ -290,9 +289,9 @@ export default function AdminPaymentPage() {
                     />
                   </div>
 
-                  {error && (
+                  {(error || localError) && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-xs">
-                      {error}
+                      {error || localError}
                     </div>
                   )}
 

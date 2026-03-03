@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import * as studentApi from '@/lib/api/student'
-import apiClient from '@/lib/api/client'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { startExam, submitExamAttempt, fetchLastAttempt } from '@/lib/redux/slices/examsSlice'
 import { markExamAttempted } from '@/lib/redux/slices/coursesSlice'

@@ -2,6 +2,8 @@
 
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+import { uploadBankSlipThunk, clearPaymentError } from '@/lib/redux/slices/paymentSlice'
 import * as paymentApi from '@/lib/api/payment'
 
 export default function BankSlipUploadPage() {
@@ -21,8 +23,10 @@ function BankSlipContent() {
   const searchParams = useSearchParams()
   const paymentId = searchParams?.get('payment_id')
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const dispatch = useAppDispatch()
+  const { isLoading: loading, error } = useAppSelector((state) => state.payment)
+
+  const [localError, setLocalError] = useState('')
   const [success, setSuccess] = useState(false)
   const [slipImage, setSlipImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -37,16 +41,16 @@ function BankSlipContent() {
     const file = e.target.files?.[0]
     if (file) {
       if (!file.type.startsWith('image/')) {
-        setError('Please select an image file')
+        setLocalError('Please select an image file')
         return
       }
       if (file.size > 5 * 1024 * 1024) {
-        setError('Image size must be less than 5MB')
+        setLocalError('Image size must be less than 5MB')
         return
       }
       setSlipImage(file)
       setImagePreview(URL.createObjectURL(file))
-      setError('')
+      setLocalError('')
     }
   }
 
@@ -54,33 +58,32 @@ function BankSlipContent() {
     e.preventDefault()
 
     if (!paymentId) {
-      setError('Payment ID is missing')
+      setLocalError('Payment ID is missing')
       return
     }
 
     if (!slipImage) {
-      setError('Please select a bank slip image')
+      setLocalError('Please select a bank slip image')
       return
     }
 
     try {
-      setLoading(true)
-      setError('')
+      dispatch(clearPaymentError())
+      setLocalError('')
 
-      await paymentApi.uploadBankSlip({
+      await dispatch(uploadBankSlipThunk({
         payment_id: paymentId,
         slip_image: slipImage,
         bank_name: formData.bank_name || undefined,
         depositor_name: formData.depositor_name || undefined,
         deposit_date: formData.deposit_date || undefined,
         reference_number: formData.reference_number || undefined
-      })
+      })).unwrap()
 
-setSuccess(true)
+      setSuccess(true)
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Failed to upload bank slip')
-    } finally {
-      setLoading(false)
+      // Handled by Redux natively if backend error, or local fallback
+      if (err?.message) setLocalError(err.message)
     }
   }
 
@@ -238,6 +241,12 @@ setSuccess(true)
               />
             </div>
 
+            {localError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {localError}
+              </div>
+            )}
+            
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                 {error}

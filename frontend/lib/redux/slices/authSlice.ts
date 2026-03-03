@@ -6,7 +6,7 @@ import {
   updateProfile as apiUpdateProfile,
   updateProfilePhoto as apiUpdateProfilePhoto
 } from '@/lib/api/auth'
-import { googleLogin as apiGoogleLogin } from '@/lib/api/googleAuth'
+import { googleLogin as apiGoogleLogin, completeGoogleProfile as apiCompleteGoogleProfile } from '@/lib/api/googleAuth'
 import apiClient from '@/lib/api/client'
 
 interface User {
@@ -127,6 +127,23 @@ export const googleLoginThunk = createAsyncThunk(
         typeof detail === 'string'
           ? detail
           : error?.message || 'Google login failed'
+      return rejectWithValue(message)
+    }
+  }
+)
+
+export const completeProfileThunk = createAsyncThunk(
+  'auth/completeGoogleProfile',
+  async (profileData: any, { rejectWithValue }) => {
+    try {
+      const response = await apiCompleteGoogleProfile(profileData)
+      return response
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail
+      const message =
+        typeof detail === 'string'
+          ? detail
+          : error?.message || 'Profile completion failed'
       return rejectWithValue(message)
     }
   }
@@ -260,6 +277,19 @@ const authSlice = createSlice({
         }
       })
       .addCase(updateProfilePhoto.rejected, (state, action) => {
+        state.isLoading = false
+        state.error = action.payload as string
+      })
+      // completeProfileThunk cases
+      .addCase(completeProfileThunk.pending, (state) => {
+        state.isLoading = true
+        state.error = null
+      })
+      .addCase(completeProfileThunk.fulfilled, (state) => {
+        state.isLoading = false
+        state.needsProfileCompletion = false
+      })
+      .addCase(completeProfileThunk.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload as string
       })

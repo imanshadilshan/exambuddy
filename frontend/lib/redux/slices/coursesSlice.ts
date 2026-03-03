@@ -104,10 +104,21 @@ export const fetchCourseExams = createAsyncThunk(
   'courses/fetchCourseExams',
   async (courseId: string, { rejectWithValue }) => {
     try {
-      const data = await studentApi.getCourseExams(courseId)
-      return data
+      return await studentApi.getCourseExams(courseId)
     } catch (error: any) {
       return rejectWithValue(error?.response?.data?.detail || 'Failed to load course exams')
+    }
+  }
+)
+
+export const enrollFreeExamThunk = createAsyncThunk(
+  'courses/enrollFreeExam',
+  async (examId: string, { rejectWithValue }) => {
+    try {
+      const response = await studentApi.enrollFreeExam(examId)
+      return { examId, ...response }
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to enroll in free exam')
     }
   }
 )
@@ -238,6 +249,27 @@ const coursesSlice = createSlice({
         state.currentCourseExams = action.payload
       })
       .addCase(fetchCourseExams.rejected, (state, action) => {
+        state.studentLoading = false
+        state.studentError = action.payload as string
+      })
+      // enrollFreeExamThunk
+      .addCase(enrollFreeExamThunk.pending, (state) => {
+        state.studentLoading = true
+        state.studentError = null
+      })
+      .addCase(enrollFreeExamThunk.fulfilled, (state, action) => {
+        state.studentLoading = false
+        // Update the specific exam to indicate it's available and an attempt exists
+        const examIndex = state.currentCourseExams.findIndex(e => e.id === action.payload.examId)
+        if (examIndex !== -1) {
+          state.currentCourseExams[examIndex] = {
+            ...state.currentCourseExams[examIndex],
+            is_enrolled: true,
+            already_attempted: false
+          }
+        }
+      })
+      .addCase(enrollFreeExamThunk.rejected, (state, action) => {
         state.studentLoading = false
         state.studentError = action.payload as string
       })
