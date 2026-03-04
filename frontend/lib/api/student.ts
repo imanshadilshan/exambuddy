@@ -253,9 +253,9 @@ export const getRankingExams = async (): Promise<RankingExam[]> => {
   return response.data
 }
 
-export const getRankingsLeaderboard = async (exam_id: string, limit = 50): Promise<LeaderboardEntry[]> => {
+export const getRankingsLeaderboard = async (exam_id: string, district?: string, limit = 50): Promise<LeaderboardEntry[]> => {
   const response = await apiClient.get('/api/v1/student/rankings/leaderboard', {
-    params: { exam_id, limit },
+    params: { exam_id, district, limit },
   })
   return response.data
 }

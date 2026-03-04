@@ -195,7 +195,7 @@ class StudentService:
             for r in rows
         ]
 
-    def get_rankings_leaderboard(self, exam_id: str, limit: int, current_user: Optional[User]) -> List[dict]:
+    def get_rankings_leaderboard(self, exam_id: str, limit: int, current_user: Optional[User], district: Optional[str] = None) -> List[dict]:
         # Subquery 1: get best attempt per user for THIS exact exam
         best_attempts_sq = (
             self.db.query(
@@ -244,8 +244,13 @@ class StudentService:
             .subquery()
         )
 
+        query = self.db.query(ranked_sq)
+        
+        if district:
+            query = query.filter(ranked_sq.c.district.ilike(f"%{district}%"))
+            
         rows = (
-            self.db.query(ranked_sq)
+            query
             .order_by(ranked_sq.c.island_rank.asc())
             .limit(max(1, min(limit, 200)))
             .all()

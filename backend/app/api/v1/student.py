@@ -162,7 +162,8 @@ def get_ranking_exams(
 @router.get("/rankings/leaderboard")
 def get_rankings_leaderboard(
     exam_id: str,
-    limit: int = 50,
+    district: Optional[str] = None,
+    limit: int = 1000,
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -171,7 +172,7 @@ def get_rankings_leaderboard(
     """
     current_user = get_optional_user(request, db) if request else None
     service = StudentService(db)
-    return service.get_rankings_leaderboard(exam_id, limit, current_user)
+    return service.get_rankings_leaderboard(exam_id, limit, current_user, district)
 
 
 @router.get("/my-attempts")

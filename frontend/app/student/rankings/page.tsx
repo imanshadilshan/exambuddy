@@ -2,7 +2,6 @@
 
 import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchRankingExams, fetchLeaderboard, fetchExamRank } from '@/lib/redux/slices/studentDashboardSlice'
@@ -50,8 +49,6 @@ export default function RankingsPage() {
 }
 
 function RankingsContent() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const dispatch = useAppDispatch()
   
   const { isAuthenticated } = useAppSelector((state) => state.auth)
@@ -63,7 +60,24 @@ function RankingsContent() {
   } = useAppSelector((state) => state.studentDashboard)
 
   const [activeExamId, setActiveExamId] = useState<string>('')
+  const [selectedGroup, setSelectedGroup] = useState('')
+  const [district, setDistrict] = useState('')
   const [loading, setLoading] = useState(true)
+
+  const DISTRICTS = [
+    'Ampara', 'Anuradhapura', 'Badulla', 'Batticaloa', 'Colombo', 'Galle', 'Gampaha',
+    'Hambantota', 'Jaffna', 'Kalutara', 'Kandy', 'Kegalle', 'Kilinochchi', 'Kurunegala',
+    'Mannar', 'Matale', 'Matara', 'Monaragala', 'Mullaitivu', 'Nuwara Eliya', 'Polonnaruwa',
+    'Puttalam', 'Ratnapura', 'Trincomalee', 'Vavuniya'
+  ]
+
+  const availableGroups = Array.from(
+    new Set(exams.map((e) => `${e.subject} - ${e.course_title}`))
+  ).sort()
+
+  const filteredExams = exams.filter(
+    (e) => !selectedGroup || `${e.subject} - ${e.course_title}` === selectedGroup
+  )
 
   // Load exams on mount
   useEffect(() => {
@@ -76,27 +90,25 @@ function RankingsContent() {
     initExams()
   }, [dispatch, exams.length])
 
-  // Set initial active exam
+  // Clear exam selection if group changes
   useEffect(() => {
-    if (exams.length > 0 && !activeExamId) {
-      const initial = searchParams.get('exam') || exams[0]?.exam_id || ''
-      setActiveExamId(initial)
-    }
-  }, [exams, activeExamId, searchParams])
+    setActiveExamId('')
+  }, [selectedGroup])
 
-  // Load leaderboard when exam changes
+  // Fetch Leaderboard Network effect
   useEffect(() => {
     if (!activeExamId) return
-    
-    dispatch(fetchLeaderboard({ exam_id: activeExamId, limit: 50 }))
-    if (isAuthenticated) {
-      dispatch(fetchExamRank(activeExamId))
-    }
+    dispatch(fetchLeaderboard({ exam_id: activeExamId, district, limit: 50 }))
+  }, [dispatch, activeExamId, district])
+
+  // Fetch Personal Rank effect
+  useEffect(() => {
+    if (!activeExamId || !isAuthenticated) return
+    dispatch(fetchExamRank(activeExamId))
   }, [dispatch, activeExamId, isAuthenticated])
 
   const handleExam = (id: string) => {
     setActiveExamId(id)
-    router.replace(`/student/rankings?exam=${id}`, { scroll: false })
   }
 
   const activeExamDetails = exams.find(e => e.exam_id === activeExamId)
@@ -145,23 +157,50 @@ function RankingsContent() {
           </div>
         ) : (
           <>
-            {/* Exam Selector */}
-            <div className="mb-6 max-w-xl">
-              <label htmlFor="exam-select" className="block text-sm font-medium text-gray-700 mb-2">
-                Select Exam Leaderboard
-              </label>
+            {/* Filter Selectors */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 shadow-sm flex flex-wrap gap-3 max-w-4xl">
               <select
-                id="exam-select"
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white min-w-[200px]"
+              >
+                <option value="">All Courses</option>
+                {availableGroups.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+
+              <select
                 value={activeExamId}
                 onChange={(e) => handleExam(e.target.value)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2.5 border bg-white"
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white min-w-[250px]"
               >
-                {exams.map((ex) => (
+                <option value="">-- Select an Exam --</option>
+                {filteredExams.map((ex) => (
                   <option key={ex.exam_id} value={ex.exam_id}>
-                    [{ex.subject}] {ex.course_title} - {ex.exam_title}
+                    {ex.exam_title}
                   </option>
                 ))}
               </select>
+
+              <select
+                value={district}
+                onChange={(e) => setDistrict(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+              >
+                <option value="">All Districts</option>
+                {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+
+              {(selectedGroup || activeExamId || district) && (
+                <button
+                  onClick={() => { setSelectedGroup(''); handleExam(''); setDistrict('') }}
+                  className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clear filters
+                </button>
+              )}
             </div>
 
             {/* My Rank Banner (only when logged in and found) */}
@@ -191,58 +230,80 @@ function RankingsContent() {
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="font-bold text-gray-900 text-lg">{activeExamDetails?.exam_title || 'Exam'} Leaderboard</h2>
                 {loadingBoard && (
-                  <div className="w-5 h-5 border-2 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
+                   <span className="text-sm text-gray-400 animate-pulse">Updating...</span>
                 )}
               </div>
 
-              {loadingBoard ? (
-                <div className="py-16 text-center text-gray-400">Loading leaderboard...</div>
-              ) : leaderboard.length === 0 ? (
-                <div className="py-16 text-center text-gray-400">No data for this exam yet</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-100">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-16">Island Rank</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-20">District Rank</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">School</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">District</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {loadingBoard ? (
+                      [...Array(10)].map((_, i) => (
+                        <tr key={i}>
+                          {[...Array(8)].map((_, j) => (
+                            <td key={j} className="px-4 py-4">
+                              <div className="h-4 bg-gray-100 rounded animate-pulse" />
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : !activeExamId ? (
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-16">Island Rank</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-20">District Rank</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">School</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">District</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Grade</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Score</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                        <td colSpan={8} className="text-center py-16 text-gray-400">
+                          <div className="text-4xl mb-2">📋</div>
+                          <p>Select an exam from the dropdown above to view its rankings.</p>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {leaderboard.map((entry, idx) => (
+                    ) : leaderboard.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="text-center py-16 text-gray-400">
+                          <div className="text-4xl mb-2">🏆</div>
+                          <p>No attempts found for this exam.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      leaderboard.map((entry, idx) => (
                         <tr
                           key={idx}
-                          className={`transition-colors ${
+                          className={`transition-colors hover:bg-gray-50/70 ${
                             entry.is_current_user
                               ? 'bg-teal-50 border-l-4 border-teal-500'
                               : entry.rank <= 3
                               ? 'bg-yellow-50/40 hover:bg-yellow-50/70'
-                              : 'hover:bg-gray-50/70'
+                              : ''
                           }`}
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center justify-center w-8">
-                              {medalIcon(entry.rank)}
+                            <div className="flex items-center gap-1 w-8">
+                              {entry.rank <= 3 ? (
+                                medalIcon(entry.rank)
+                              ) : (
+                                <span className="text-sm font-semibold text-gray-500">#{entry.rank}</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-center">
-                            <span className="font-semibold text-gray-600">#{entry.district_rank}</span>
+                            <span className="font-semibold text-gray-500">#{entry.district_rank}</span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                                entry.is_current_user
-                                  ? 'bg-teal-600 text-white'
-                                  : 'bg-gray-200 text-gray-600'
-                              }`}>
-                                {entry.full_name.trim().charAt(0).toUpperCase()}
-                              </div>
+                              {entry.is_current_user && (
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-teal-600 text-white`}>
+                                  {entry.full_name.trim().charAt(0).toUpperCase()}
+                                </div>
+                              )}
                               <div>
                                 <p className={`font-medium ${entry.is_current_user ? 'text-teal-800' : 'text-gray-900'}`}>
                                   {entry.full_name}
@@ -253,21 +314,28 @@ function RankingsContent() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-gray-600 max-w-[180px] truncate">{entry.school}</td>
-                          <td className="px-4 py-4 text-gray-600 whitespace-nowrap">{entry.district}</td>
+                          <td className="px-4 py-4 text-gray-500 max-w-[180px] truncate">{entry.school}</td>
+                          <td className="px-4 py-4 text-gray-500 whitespace-nowrap">{entry.district}</td>
                           <td className="px-4 py-4 text-center">
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-medium">
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium">
                               G{entry.grade}
                             </span>
                           </td>
-                          <td className="px-4 py-4 text-right font-semibold text-gray-900">{entry.score}%</td>
-                          <td className="px-4 py-4 text-right text-gray-500 whitespace-nowrap">{formatTime(entry.time_taken_seconds)}</td>
+                          <td className="px-4 py-4 text-center">
+                            <span className={`font-semibold ${
+                              entry.score >= 75 ? 'text-green-600' :
+                              entry.score >= 50 ? 'text-yellow-600' : 'text-red-500'
+                            }`}>
+                              {entry.score}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-center text-gray-500 whitespace-nowrap">{formatTime(entry.time_taken_seconds)}</td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}

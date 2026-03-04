@@ -70,9 +70,9 @@ export const fetchPlatformStats = createAsyncThunk(
 
 export const fetchLeaderboard = createAsyncThunk(
   'dashboard/fetchLeaderboard',
-  async (params: { exam_id: string; limit?: number }, { rejectWithValue }) => {
+  async (params: { exam_id: string; district?: string; limit?: number }, { rejectWithValue }) => {
     try {
-      return await studentApi.getRankingsLeaderboard(params.exam_id, params.limit)
+      return await studentApi.getRankingsLeaderboard(params.exam_id, params.district, params.limit)
     } catch (error: any) {
       return rejectWithValue(error?.response?.data?.detail || 'Failed to fetch leaderboard')
     }
