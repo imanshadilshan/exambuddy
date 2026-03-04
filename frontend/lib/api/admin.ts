@@ -85,7 +85,8 @@ export const getAdminAnalytics = async (): Promise<AnalyticsData> => {
 // Rankings
 
 export interface AdminRankingRow {
-  rank: number
+  island_rank: number
+  district_rank: number
   user_id: string
   full_name: string
   district: string
@@ -95,17 +96,25 @@ export interface AdminRankingRow {
   total_marks: number
   total_questions: number
   score_pct: number
+  time_taken_seconds: number
   attempt_count: number
+}
+
+export interface AdminExamFilter {
+  exam_id: string
+  exam_title: string
+  course_title: string
+  subject: string
 }
 
 export interface AdminRankingsResponse {
   rankings: AdminRankingRow[]
-  subjects: string[]
+  exams: AdminExamFilter[]
 }
 
 export const getAdminRankings = async (params?: {
-  subject?: string
-  grade?: number
+  exam_id?: string
+  district?: string
   limit?: number
 }): Promise<AdminRankingsResponse> => {
   const response = await apiClient.get('/api/v1/admin/rankings', { params })

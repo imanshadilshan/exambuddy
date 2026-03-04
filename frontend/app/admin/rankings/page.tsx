@@ -14,23 +14,54 @@ export default function AdminRankingsPage() {
   const { rankings: rankingsData, rankingsLoading: loading, error } = useAppSelector((s) => s.admin)
 
   const rankings = rankingsData?.rankings ?? []
-  const subjects = rankingsData?.subjects ?? []
+  const exams = rankingsData?.exams ?? []
 
-  const [subject, setSubject] = useState('')
-  const [grade, setGrade] = useState<number | ''>('')
+  // Extract unique subjects & courses for the first filter
+  const availableGroups = Array.from(
+    new Set(exams.map((e) => `${e.subject} - ${e.course_title}`))
+  ).sort()
+
+  const [selectedGroup, setSelectedGroup] = useState('')
+  const [examId, setExamId] = useState('')
+  const [district, setDistrict] = useState('')
+
+  // Also extract unique districts from the current students list if we wanted a dynamic list,
+  // but for simplicity we'll just use a static list or text input.
+  const DISTRICTS = [
+    'Ampara', 'Anuradhapura', 'Badulla', 'Batticaloa', 'Colombo', 'Galle', 'Gampaha',
+    'Hambantota', 'Jaffna', 'Kalutara', 'Kandy', 'Kegalle', 'Kilinochchi', 'Kurunegala',
+    'Mannar', 'Matale', 'Matara', 'Monaragala', 'Mullaitivu', 'Nuwara Eliya', 'Polonnaruwa',
+    'Puttalam', 'Ratnapura', 'Trincomalee', 'Vavuniya'
+  ]
 
   useEffect(() => {
     if (user && user.role !== 'admin') router.push('/')
   }, [user, router])
 
+  // Clear exam selection if group changes
+  useEffect(() => {
+    setExamId('')
+  }, [selectedGroup])
+
   useEffect(() => {
     if (!user || user.role !== 'admin') return
     const params: Record<string, any> = { limit: 100 }
-    if (subject) params.subject = subject
-    if (grade !== '') params.grade = grade
-    dispatch(fetchAdminRankings(params))
+    
+    // Only fetch rankings if an exam is selected
+    if (examId) {
+      params.exam_id = examId
+      if (district) params.district = district
+      dispatch(fetchAdminRankings(params))
+    } else if (exams.length === 0) {
+      // First load: just fetch the available exams (exam_id is optional and will return empty rankings but full exam list)
+      dispatch(fetchAdminRankings(params))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, subject, grade])
+  }, [user, examId, district])
+
+  const filteredExams = exams.filter(
+    (e) => !selectedGroup || `${e.subject} - ${e.course_title}` === selectedGroup
+  )
 
   const medal = (rank: number) => {
     if (rank === 1) return '🥇'
@@ -55,26 +86,37 @@ export default function AdminRankingsPage() {
         {/* Filters */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 shadow-sm flex flex-wrap gap-3">
           <select
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white min-w-[200px]"
           >
-            <option value="">All Subjects</option>
-            {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+            <option value="">All Courses</option>
+            {availableGroups.map((g) => <option key={g} value={g}>{g}</option>)}
           </select>
 
           <select
-            value={grade}
-            onChange={(e) => setGrade(e.target.value === '' ? '' : Number(e.target.value))}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            value={examId}
+            onChange={(e) => setExamId(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white min-w-[250px]"
           >
-            <option value="">All Grades</option>
-            {GRADES.map((g) => <option key={g} value={g}>Grade {g}</option>)}
+            <option value="">-- Select an Exam --</option>
+            {filteredExams.map((e) => (
+              <option key={e.exam_id} value={e.exam_id}>{e.exam_title}</option>
+            ))}
           </select>
 
-          {(subject || grade !== '') && (
+          <select
+            value={district}
+            onChange={(e) => setDistrict(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+          >
+            <option value="">All Districts</option>
+            {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+
+          {(selectedGroup || examId || district) && (
             <button
-              onClick={() => { setSubject(''); setGrade('') }}
+              onClick={() => { setSelectedGroup(''); setExamId(''); setDistrict('') }}
               className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -91,13 +133,13 @@ export default function AdminRankingsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 w-12">Rank</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 w-16">Island Rank</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 w-16 hidden md:table-cell">District Rank</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Student</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Subject</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Grade</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">District</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-600">Score %</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-600">Marks</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Time</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Attempts</th>
                 </tr>
               </thead>
@@ -112,37 +154,45 @@ export default function AdminRankingsPage() {
                       ))}
                     </tr>
                   ))
+                ) : !examId ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-16 text-gray-400">
+                      <div className="text-4xl mb-2">📋</div>
+                      <p>Select an exam from the dropdown above to view its rankings.</p>
+                    </td>
+                  </tr>
                 ) : rankings.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="text-center py-16 text-gray-400">
                       <div className="text-4xl mb-2">🏆</div>
-                      <p>No ranking data yet. Students need to complete exams first.</p>
+                      <p>No attempts found for this exam.</p>
                     </td>
                   </tr>
                 ) : (
                   rankings.map((row) => (
-                    <tr key={`${row.user_id}-${row.subject}`} className={`hover:bg-gray-50 transition-colors ${row.rank <= 3 ? 'bg-yellow-50/30' : ''}`}>
+                    <tr key={`${row.user_id}`} className={`hover:bg-gray-50 transition-colors ${row.island_rank <= 3 ? 'bg-yellow-50/30' : ''}`}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          {medal(row.rank) ? (
-                            <span className="text-lg">{medal(row.rank)}</span>
+                          {medal(row.island_rank) ? (
+                            <span className="text-lg">{medal(row.island_rank)}</span>
                           ) : (
-                            <span className="text-sm font-semibold text-gray-500">#{row.rank}</span>
+                            <span className="text-sm font-semibold text-gray-500">#{row.island_rank}</span>
                           )}
                         </div>
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <span className="text-sm font-semibold text-gray-500 flex items-center gap-1">
+                          {medal(row.district_rank)} #{row.district_rank}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <div>
                           <p className="font-medium text-gray-900">{row.full_name}</p>
-                          <p className="text-xs text-gray-400 hidden sm:block truncate max-w-[200px]">{row.school}</p>
+                          <p className="text-xs text-gray-400 hidden sm:block truncate max-w-[200px]">
+                            {row.school} &bull; Grade {row.grade}
+                          </p>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex px-2 py-0.5 bg-teal-50 text-teal-700 rounded text-xs font-medium">
-                          {row.subject}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 hidden md:table-cell">Grade {row.grade}</td>
                       <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{row.district}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`font-semibold ${
@@ -154,6 +204,9 @@ export default function AdminRankingsPage() {
                       </td>
                       <td className="px-4 py-3 text-center text-gray-700">
                         {row.total_marks}/{row.total_questions}
+                      </td>
+                      <td className="px-4 py-3 text-center text-gray-500 hidden sm:table-cell">
+                        {Math.floor(row.time_taken_seconds / 60)}m {row.time_taken_seconds % 60}s
                       </td>
                       <td className="px-4 py-3 text-center text-gray-500 hidden md:table-cell">{row.attempt_count}</td>
                     </tr>

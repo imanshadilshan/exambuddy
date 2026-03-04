@@ -100,13 +100,15 @@ export const toggleStudentActiveStatus = createAsyncThunk(
 export const fetchAdminRankings = createAsyncThunk(
   'admin/fetchAdminRankings',
   async (
-    params: { subject?: string; grade?: number; limit?: number } | undefined,
+    params: { exam_id?: string; district?: string; limit?: number } | undefined,
     { rejectWithValue }
   ) => {
     try {
       return await adminApi.getAdminRankings(params)
     } catch (error: any) {
-      return rejectWithValue(error?.response?.data?.detail || 'Failed to load rankings')
+      const detail = error?.response?.data?.detail
+      const msg = Array.isArray(detail) ? detail[0]?.msg : detail
+      return rejectWithValue(msg || 'Failed to load rankings')
     }
   }
 )

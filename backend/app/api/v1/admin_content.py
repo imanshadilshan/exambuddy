@@ -634,103 +634,124 @@ def get_analytics(
 
 @router.get("/rankings")
 def admin_rankings(
-    subject: str | None = Query(default=None),
-    grade: int | None = Query(default=None),
+    exam_id: str | None = Query(default=None),
+    district: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin),
 ):
-    """Admin view of subject rankings across all students (based on last attempt per exam)"""
+    """Admin view of exam-specific rankings (Island & District)"""
 
-    # Step 1: last completed attempt per (user, exam)
-    last_attempt_sq = (
-        db.query(
-            ExamAttempt.user_id,
-            ExamAttempt.exam_id,
-            func.max(ExamAttempt.submitted_at).label("last_submitted_at"),
-        )
-        .join(Exam, ExamAttempt.exam_id == Exam.id)
-        .join(Course, Exam.course_id == Course.id)
-        .filter(ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]))
-    )
-    if subject:
-        last_attempt_sq = last_attempt_sq.filter(Course.subject.ilike(f"%{subject}%"))
-    if grade:
-        last_attempt_sq = last_attempt_sq.join(Student, Student.user_id == ExamAttempt.user_id).filter(Student.grade == grade)
-    last_attempt_sq = last_attempt_sq.group_by(ExamAttempt.user_id, ExamAttempt.exam_id).subquery()
-
-    # Step 2: join back to get marks/time from those last attempts
-    last_data_sq = (
-        db.query(
-            ExamAttempt.user_id,
-            ExamAttempt.marks_obtained,
-            ExamAttempt.total_questions,
-            ExamAttempt.time_taken_seconds,
-            Exam.course_id,
-        )
-        .join(
-            last_attempt_sq,
-            (ExamAttempt.user_id == last_attempt_sq.c.user_id)
-            & (ExamAttempt.exam_id == last_attempt_sq.c.exam_id)
-            & (ExamAttempt.submitted_at == last_attempt_sq.c.last_submitted_at),
-        )
-        .join(Exam, ExamAttempt.exam_id == Exam.id)
-        .subquery()
-    )
-
-    # Step 3: aggregate per (user, subject)
-    q = (
-        db.query(
-            User.id.label("user_id"),
-            Student.full_name,
-            Student.district,
-            Student.grade,
-            Student.school,
-            Course.subject,
-            func.sum(last_data_sq.c.marks_obtained).label("total_marks"),
-            func.sum(last_data_sq.c.total_questions).label("total_questions"),
-            func.count(last_data_sq.c.user_id).label("attempt_count"),
-        )
-        .join(Student, Student.user_id == User.id)
-        .join(last_data_sq, last_data_sq.c.user_id == User.id)
-        .join(Course, Course.id == last_data_sq.c.course_id)
-        .group_by(User.id, Student.full_name, Student.district, Student.grade, Student.school, Course.subject)
-        .order_by(func.sum(last_data_sq.c.marks_obtained).desc())
-        .limit(limit)
-    )
-    if subject:
-        q = q.filter(Course.subject.ilike(f"%{subject}%"))
-    if grade:
-        q = q.filter(Student.grade == grade)
-
-    rows = q.all()
     rankings = []
-    for i, r in enumerate(rows):
-        total_q = int(r.total_questions or 1)
-        pct = round((int(r.total_marks or 0) / total_q) * 100, 1)
-        rankings.append({
-            "rank": i + 1,
-            "user_id": str(r.user_id),
-            "full_name": r.full_name,
-            "district": r.district,
-            "grade": r.grade,
-            "school": r.school,
-            "subject": r.subject,
-            "total_marks": int(r.total_marks or 0),
-            "total_questions": total_q,
-            "score_pct": pct,
-            "attempt_count": int(r.attempt_count),
-        })
+    
+    # If exam_id is provided, compute rankings
+    if exam_id:
+        try:
+            exam_uuid = UUID(exam_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid exam_id format")
 
-    # Unique subjects for filter dropdown
-    subject_rows = (
-        db.query(Course.subject)
-        .join(Exam, Exam.course_id == Course.id)
+        # Step 1: Get best attempt per user for THIS exact exam
+        best_attempts_sq = (
+            db.query(
+                ExamAttempt.user_id,
+                ExamAttempt.exam_id,
+                func.max(ExamAttempt.marks_obtained).label('max_marks'),
+                func.min(ExamAttempt.time_taken_seconds).label('min_time'),
+                func.count(ExamAttempt.id).label('attempt_count')
+            )
+            .filter(
+                ExamAttempt.exam_id == exam_uuid,
+                ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT])
+            )
+            .group_by(ExamAttempt.user_id, ExamAttempt.exam_id)
+            .subquery()
+        )
+
+        # Step 2: compute ranks and join user data
+        ranked_sq = (
+            db.query(
+                best_attempts_sq.c.user_id,
+                best_attempts_sq.c.max_marks.label("total_marks"),
+                best_attempts_sq.c.min_time.label("time_taken"),
+                best_attempts_sq.c.attempt_count,
+                Student.full_name,
+                Student.school,
+                Student.district,
+                Student.grade,
+                Exam.total_questions,
+                Course.subject,
+                func.rank().over(
+                    order_by=[
+                        best_attempts_sq.c.max_marks.desc(),
+                        best_attempts_sq.c.min_time.asc()
+                    ]
+                ).label("island_rank"),
+                func.rank().over(
+                    partition_by=Student.district,
+                    order_by=[
+                        best_attempts_sq.c.max_marks.desc(),
+                        best_attempts_sq.c.min_time.asc()
+                    ]
+                ).label("district_rank")
+            )
+            .join(Student, Student.user_id == best_attempts_sq.c.user_id)
+            .join(Exam, Exam.id == best_attempts_sq.c.exam_id)
+            .join(Course, Course.id == Exam.course_id)
+        )
+
+        # Apply district filter if requested
+        if district:
+            ranked_sq = ranked_sq.filter(Student.district.ilike(f"%{district}%"))
+            
+        ranked_sq = ranked_sq.subquery()
+
+        # Step 3: Fetch the limited ordered rows
+        rows = (
+            db.query(ranked_sq)
+            .order_by(ranked_sq.c.island_rank.asc())
+            .limit(limit)
+            .all()
+        )
+
+        for r in rows:
+            total_q = int(r.total_questions or 1)
+            pct = round((int(r.total_marks or 0) / total_q) * 100, 1)
+            rankings.append({
+                "island_rank": int(r.island_rank),
+                "district_rank": int(r.district_rank),
+                "user_id": str(r.user_id),
+                "full_name": r.full_name,
+                "district": r.district,
+                "grade": r.grade,
+                "school": r.school,
+                "subject": r.subject,
+                "total_marks": int(r.total_marks or 0),
+                "total_questions": total_q,
+                "score_pct": pct,
+                "time_taken_seconds": int(r.time_taken),
+                "attempt_count": int(r.attempt_count),
+            })
+
+    # Retrieve all valid exams that have submissions so admin can pick them in dropdown
+    exam_rows = (
+        db.query(Exam.id, Exam.title, Course.title.label("course_title"), Course.subject)
+        .join(Course, Exam.course_id == Course.id)
         .join(ExamAttempt, ExamAttempt.exam_id == Exam.id)
-        .filter(ExamAttempt.status == ExamAttemptStatus.SUBMITTED)
+        .filter(ExamAttempt.status.in_([ExamAttemptStatus.SUBMITTED, ExamAttemptStatus.TIMEOUT]))
         .distinct()
+        .order_by(Course.subject.asc(), Course.title.asc(), Exam.title.asc())
         .all()
     )
-    subjects = sorted([r.subject for r in subject_rows if r.subject])
+    
+    exams = [
+        {
+            "exam_id": str(r.id),
+            "exam_title": r.title,
+            "course_title": r.course_title,
+            "subject": r.subject,
+        }
+        for r in exam_rows
+    ]
 
-    return {"rankings": rankings, "subjects": subjects}
+    return {"rankings": rankings, "exams": exams}
