@@ -26,7 +26,7 @@ venv\Scripts\activate
 ### 2. Install Dependencies
 
 ```bash
-pip install -r requirement.txt
+pip install -r requirements.txt
 ```
 
 ### 3. Configure Environment Variables
