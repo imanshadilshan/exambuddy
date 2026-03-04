@@ -135,6 +135,28 @@ export const deleteCourse = createAsyncThunk(
   }
 )
 
+export const uploadImageThunk = createAsyncThunk(
+  'courses/uploadImage',
+  async ({ file, entity }: { file: File; entity: string }, { rejectWithValue }) => {
+    try {
+      return await adminApi.uploadImage(file, entity)
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to upload image')
+    }
+  }
+)
+
+export const deleteImageThunk = createAsyncThunk(
+  'courses/deleteImage',
+  async (publicId: string, { rejectWithValue }) => {
+    try {
+      return await adminApi.deleteImage(publicId)
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to delete image')
+    }
+  }
+)
+
 const coursesSlice = createSlice({
   name: 'courses',
   initialState,

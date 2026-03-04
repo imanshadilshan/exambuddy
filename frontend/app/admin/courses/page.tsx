@@ -5,8 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
-import { fetchCourses, createCourse, updateCourse, deleteCourse, AdminCourse } from '@/lib/redux/slices/coursesSlice'
-import { uploadImage, deleteImage } from '@/lib/api/admin'
+import { fetchCourses, createCourse, updateCourse, deleteCourse, AdminCourse, uploadImageThunk, deleteImageThunk } from '@/lib/redux/slices/coursesSlice'
 import { getErrorMessage } from '@/lib/utils'
 
 export default function AdminCoursesPage() {
@@ -36,13 +35,17 @@ export default function AdminCoursesPage() {
   const error = storeError || localError
 
   const uploadImageToCloudinary = async (file: File) => {
-    const result = await uploadImage(file, 'courses')
-    return { image_url: result.image_url, image_public_id: result.image_public_id }
+    const resultAction = await dispatch(uploadImageThunk({ file, entity: 'courses' }))
+    if (uploadImageThunk.fulfilled.match(resultAction)) {
+      return resultAction.payload
+    } else {
+      throw new Error(resultAction.payload as string || 'Image upload failed')
+    }
   }
 
   const deleteImageFromCloudinary = async (publicId: string | null | undefined) => {
     if (!publicId) return
-    try { await deleteImage(publicId) } catch (err) { console.error('Failed to delete image:', err) }
+    try { await dispatch(deleteImageThunk(publicId)) } catch (err) { console.error('Failed to delete image:', err) }
   }
 
   useEffect(() => {

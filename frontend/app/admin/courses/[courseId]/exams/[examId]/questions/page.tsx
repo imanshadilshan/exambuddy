@@ -8,7 +8,7 @@ import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 import { fetchCourses } from '@/lib/redux/slices/coursesSlice'
 import { fetchExams } from '@/lib/redux/slices/examsSlice'
 import { fetchQuestions, createQuestion, updateQuestion, deleteQuestion, importQuestionsCSV } from '@/lib/redux/slices/questionsSlice'
-import { uploadImage, deleteImage } from '@/lib/api/admin'
+import { uploadImageThunk, deleteImageThunk } from '@/lib/redux/slices/coursesSlice'
 import { getErrorMessage } from '@/lib/utils'
 
 type Course = {
@@ -137,17 +137,21 @@ export default function QuestionsPage() {
   }, [courses, exams, courseId, examId])
 
   const uploadQuestionImage = async (file: File) => {
-    const result = await uploadImage(file, 'questions')
-    return {
-      image_url: result.image_url,
-      image_public_id: result.image_public_id,
+    const resultAction = await dispatch(uploadImageThunk({ file, entity: 'questions' }))
+    if (uploadImageThunk.fulfilled.match(resultAction)) {
+      return {
+        image_url: resultAction.payload.image_url,
+        image_public_id: resultAction.payload.image_public_id,
+      }
+    } else {
+      throw new Error(resultAction.payload as string || 'Image upload failed')
     }
   }
 
   const deleteImageFromCloudinary = async (publicId: string | null | undefined) => {
     if (!publicId) return
     try {
-      await deleteImage(publicId)
+      await dispatch(deleteImageThunk(publicId))
     } catch (err: any) {
       console.error('Failed to delete image from Cloudinary:', err)
     }

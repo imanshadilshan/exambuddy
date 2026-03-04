@@ -62,20 +62,3 @@ export const errorHandlingMiddleware: Middleware = (store) => (next) => (action:
   
   return result
 }
-
-/**
- * Redux middleware to handle loading states
- */
-export const loadingMiddleware: Middleware = (store) => (next) => (action: any) => {
-  // Set loading to true for pending actions
-  if (action.type && action.type.endsWith('/pending')) {
-    // You can dispatch setLoading here if needed
-  }
-  
-  // Set loading to false for fulfilled or rejected actions
-  if (action.type && (action.type.endsWith('/fulfilled') || action.type.endsWith('/rejected'))) {
-    // You can dispatch setLoading here if needed
-  }
-  
-  return next(action)
-}

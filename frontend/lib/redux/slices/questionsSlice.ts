@@ -98,7 +98,7 @@ const questionsSlice = createSlice({
   name: 'questions',
   initialState,
   reducers: {
-    clearError: (state) => {
+    clearQuestionsError: (state) => {
       state.error = null
     },
     clearQuestions: (state) => {
@@ -178,5 +178,5 @@ const questionsSlice = createSlice({
   },
 })
 
-export const { clearError, clearQuestions } = questionsSlice.actions
+export const { clearQuestionsError, clearQuestions } = questionsSlice.actions
 export default questionsSlice.reducer

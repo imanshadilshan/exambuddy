@@ -7,7 +7,7 @@ import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { fetchCurrentUser } from '@/lib/redux/slices/authSlice'
 import { fetchCourses } from '@/lib/redux/slices/coursesSlice'
 import { fetchExams, createExam, updateExam, deleteExam } from '@/lib/redux/slices/examsSlice'
-import { uploadImage, deleteImage } from '@/lib/api/admin'
+import { uploadImageThunk, deleteImageThunk } from '@/lib/redux/slices/coursesSlice'
 import { getErrorMessage } from '@/lib/utils'
 
 type Course = {
@@ -68,17 +68,21 @@ export default function CourseExamsPage() {
   const course = useMemo(() => courses.find((c) => c.id === courseId), [courses, courseId])
 
   const uploadImageToCloudinary = async (file: File) => {
-    const result = await uploadImage(file, 'exams')
-    return {
-      image_url: result.image_url,
-      image_public_id: result.image_public_id,
+    const resultAction = await dispatch(uploadImageThunk({ file, entity: 'exams' }))
+    if (uploadImageThunk.fulfilled.match(resultAction)) {
+      return {
+        image_url: resultAction.payload.image_url,
+        image_public_id: resultAction.payload.image_public_id,
+      }
+    } else {
+      throw new Error(resultAction.payload as string || 'Image upload failed')
     }
   }
 
   const deleteImageFromCloudinary = async (publicId: string | null | undefined) => {
     if (!publicId) return
     try {
-      await deleteImage(publicId)
+      await dispatch(deleteImageThunk(publicId))
     } catch (err: any) {
       console.error('Failed to delete image from Cloudinary:', err)
     }

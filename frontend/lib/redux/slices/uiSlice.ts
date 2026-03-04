@@ -11,16 +11,12 @@ interface UIState {
   notifications: Notification[]
   isLoading: boolean
   loadingMessage: string | null
-  sidebarOpen: boolean
-  theme: 'light' | 'dark'
 }
 
 const initialState: UIState = {
   notifications: [],
   isLoading: false,
   loadingMessage: null,
-  sidebarOpen: true,
-  theme: 'light',
 }
 
 const uiSlice = createSlice({
@@ -44,18 +40,6 @@ const uiSlice = createSlice({
       state.isLoading = action.payload.isLoading
       state.loadingMessage = action.payload.message || null
     },
-    toggleSidebar: (state) => {
-      state.sidebarOpen = !state.sidebarOpen
-    },
-    setSidebarOpen: (state, action: PayloadAction<boolean>) => {
-      state.sidebarOpen = action.payload
-    },
-    setTheme: (state, action: PayloadAction<'light' | 'dark'>) => {
-      state.theme = action.payload
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('theme', action.payload)
-      }
-    },
   },
 })
 
@@ -64,9 +48,6 @@ export const {
   hideNotification,
   clearNotifications,
   setLoading,
-  toggleSidebar,
-  setSidebarOpen,
-  setTheme,
 } = uiSlice.actions
 
 export default uiSlice.reducer

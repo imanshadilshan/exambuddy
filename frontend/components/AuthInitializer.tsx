@@ -12,8 +12,15 @@ export default function AuthInitializer() {
     if (typeof window === 'undefined') return
 
     if (!accessToken) {
-      const storedAccessToken = localStorage.getItem('accessToken')
-      const storedRefreshToken = localStorage.getItem('refreshToken')
+      // Check session storage first (Remember Me = false)
+      let storedAccessToken = sessionStorage.getItem('accessToken')
+      let storedRefreshToken = sessionStorage.getItem('refreshToken')
+
+      // Then check local storage (Remember Me = true)
+      if (!storedAccessToken) {
+        storedAccessToken = localStorage.getItem('accessToken')
+        storedRefreshToken = localStorage.getItem('refreshToken')
+      }
 
       if (storedAccessToken && storedRefreshToken) {
         dispatch(setCredentials({

@@ -150,7 +150,7 @@ export interface PaymentStats {
 }
 
 export async function getPaymentStats(): Promise<PaymentStats> {
-  const response = await api.get('/admin/payment/payment-stats')
+  const response = await api.get('/api/v1/admin/payment/payment-stats')
   return response.data
 }
 
@@ -160,6 +160,6 @@ export async function getAllPayments(statusFilter?: string, paymentMethod?: stri
   if (paymentMethod) params.append('payment_method', paymentMethod)
   
   const queryString = params.toString()
-  const response = await api.get(`/admin/payment/all-payments${queryString ? `?${queryString}` : ''}`)
+  const response = await api.get(`/api/v1/admin/payment/all-payments${queryString ? `?${queryString}` : ''}`)
   return response.data
 }

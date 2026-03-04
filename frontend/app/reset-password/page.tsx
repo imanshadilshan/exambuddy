@@ -2,16 +2,15 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { useDispatch, useSelector } from 'react-redux'
-import { AppDispatch, RootState } from '@/lib/redux/store'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { resetPasswordThunk } from '@/lib/redux/slices/authSlice'
 import Link from 'next/link'
 
 function ResetPasswordContent() {
-  const dispatch = useDispatch<AppDispatch>()
+  const dispatch = useAppDispatch()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isLoading } = useSelector((state: RootState) => state.auth)
+  const { isLoading } = useAppSelector((state) => state.auth)
 
   const token = searchParams.get('token') || ''
 

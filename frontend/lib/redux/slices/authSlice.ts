@@ -8,9 +8,9 @@ import {
   forgotPassword as apiForgotPassword,
   resetPassword as apiResetPassword,
   setPassword as apiSetPassword,
+  changePassword as apiChangePassword,
 } from '@/lib/api/auth'
 import { googleLogin as apiGoogleLogin, completeGoogleProfile as apiCompleteGoogleProfile } from '@/lib/api/googleAuth'
-import apiClient from '@/lib/api/client'
 
 interface User {
   id: string
@@ -99,8 +99,8 @@ export const changePassword = createAsyncThunk(
   'auth/changePassword',
   async (data: { current_password: string; new_password: string }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.put('/api/v1/auth/change-password', data)
-      return response.data
+      const response = await apiChangePassword(data)
+      return response
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'Failed to change password')
     }

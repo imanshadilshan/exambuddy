@@ -134,7 +134,7 @@ const examsSlice = createSlice({
   name: 'exams',
   initialState,
   reducers: {
-    clearError: (state) => {
+    clearExamsError: (state) => {
       state.error = null
     },
   },
@@ -237,5 +237,5 @@ const examsSlice = createSlice({
   },
 })
 
-export const { clearError } = examsSlice.actions
+export const { clearExamsError } = examsSlice.actions
 export default examsSlice.reducer

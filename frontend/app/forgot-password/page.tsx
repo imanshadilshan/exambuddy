@@ -1,14 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { AppDispatch, RootState } from '@/lib/redux/store'
+import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
 import { forgotPasswordThunk } from '@/lib/redux/slices/authSlice'
 import Link from 'next/link'
 
 export default function ForgotPasswordPage() {
-  const dispatch = useDispatch<AppDispatch>()
-  const { isLoading } = useSelector((state: RootState) => state.auth)
+  const dispatch = useAppDispatch()
+  const { isLoading } = useAppSelector((state) => state.auth)
 
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)

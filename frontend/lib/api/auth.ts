@@ -38,11 +38,6 @@ export const getCurrentUser = async () => {
   return response.data
 }
 
-export const logout = async () => {
-  const response = await apiClient.post('/api/v1/auth/logout')
-  return response.data
-}
-
 export const updateProfile = async (data: any) => {
   const response = await apiClient.put('/api/v1/auth/profile', data)
   return response.data
@@ -76,5 +71,13 @@ export const setPassword = async (data: {
   confirm_password: string
 }) => {
   const response = await apiClient.post('/api/v1/auth/set-password', data)
+  return response.data
+}
+
+export const changePassword = async (data: {
+  current_password: string
+  new_password: string
+}) => {
+  const response = await apiClient.put('/api/v1/auth/change-password', data)
   return response.data
 }
