@@ -4,7 +4,10 @@ import {
   register as apiRegister, 
   getCurrentUser,
   updateProfile as apiUpdateProfile,
-  updateProfilePhoto as apiUpdateProfilePhoto
+  updateProfilePhoto as apiUpdateProfilePhoto,
+  forgotPassword as apiForgotPassword,
+  resetPassword as apiResetPassword,
+  setPassword as apiSetPassword,
 } from '@/lib/api/auth'
 import { googleLogin as apiGoogleLogin, completeGoogleProfile as apiCompleteGoogleProfile } from '@/lib/api/googleAuth'
 import apiClient from '@/lib/api/client'
@@ -14,6 +17,8 @@ interface User {
   email: string
   role: string
   is_active: boolean
+  auth_provider?: string    // 'email' | 'google'
+  has_password?: boolean    // true when password_hash is set
   profile?: any
 }
 
@@ -40,9 +45,18 @@ const initialState: AuthState = {
 // Async thunks
 export const login = createAsyncThunk(
   'auth/login',
-  async (credentials: { email: string; password: string }, { rejectWithValue }) => {
+  async (credentials: { email: string; password: string; remember_me?: boolean }, { rejectWithValue }) => {
     try {
       const response = await apiLogin(credentials)
+      // Store tokens based on remember_me preference
+      if (typeof window !== 'undefined') {
+        const storage = credentials.remember_me ? localStorage : sessionStorage
+        const other = credentials.remember_me ? sessionStorage : localStorage
+        storage.setItem('accessToken', response.access_token)
+        storage.setItem('refreshToken', response.refresh_token)
+        other.removeItem('accessToken')
+        other.removeItem('refreshToken')
+      }
       return response
     } catch (error: any) {
       const detail = error?.response?.data?.detail
@@ -149,6 +163,39 @@ export const completeProfileThunk = createAsyncThunk(
   }
 )
 
+export const forgotPasswordThunk = createAsyncThunk(
+  'auth/forgotPassword',
+  async (email: string, { rejectWithValue }) => {
+    try {
+      return await apiForgotPassword({ email })
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to send reset email')
+    }
+  }
+)
+
+export const resetPasswordThunk = createAsyncThunk(
+  'auth/resetPassword',
+  async (data: { token: string; new_password: string; confirm_password: string }, { rejectWithValue }) => {
+    try {
+      return await apiResetPassword(data)
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to reset password')
+    }
+  }
+)
+
+export const setPasswordThunk = createAsyncThunk(
+  'auth/setPassword',
+  async (data: { new_password: string; confirm_password: string }, { rejectWithValue }) => {
+    try {
+      return await apiSetPassword(data)
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.detail || 'Failed to set password')
+    }
+  }
+)
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -162,6 +209,8 @@ const authSlice = createSlice({
       if (typeof window !== 'undefined') {
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
+        sessionStorage.removeItem('accessToken')
+        sessionStorage.removeItem('refreshToken')
       }
     },
     setCredentials: (state, action: PayloadAction<{ accessToken: string; refreshToken: string }>) => {
@@ -188,10 +237,7 @@ const authSlice = createSlice({
         state.accessToken = action.payload.access_token
         state.refreshToken = action.payload.refresh_token
         state.isAuthenticated = true
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('accessToken', action.payload.access_token)
-          localStorage.setItem('refreshToken', action.payload.refresh_token)
-        }
+        // Token storage is handled inside the thunk (localStorage vs sessionStorage)
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false
@@ -293,6 +339,18 @@ const authSlice = createSlice({
         state.isLoading = false
         state.error = action.payload as string
       })
+      // Forgot password
+      .addCase(forgotPasswordThunk.pending, (state) => { state.isLoading = true; state.error = null })
+      .addCase(forgotPasswordThunk.fulfilled, (state) => { state.isLoading = false })
+      .addCase(forgotPasswordThunk.rejected, (state, action) => { state.isLoading = false; state.error = action.payload as string })
+      // Reset password
+      .addCase(resetPasswordThunk.pending, (state) => { state.isLoading = true; state.error = null })
+      .addCase(resetPasswordThunk.fulfilled, (state) => { state.isLoading = false })
+      .addCase(resetPasswordThunk.rejected, (state, action) => { state.isLoading = false; state.error = action.payload as string })
+      // Set password
+      .addCase(setPasswordThunk.pending, (state) => { state.isLoading = true; state.error = null })
+      .addCase(setPasswordThunk.fulfilled, (state) => { state.isLoading = false })
+      .addCase(setPasswordThunk.rejected, (state, action) => { state.isLoading = false; state.error = action.payload as string })
   },
 })
 

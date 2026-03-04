@@ -64,21 +64,51 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def create_refresh_token(data: dict) -> str:
+def create_refresh_token(data: dict, remember_me: bool = False) -> str:
     """
     Create JWT refresh token
     
     Args:
         data: Dictionary of data to encode in token
+        remember_me: If True, token lasts 30 days instead of the default
         
     Returns:
         Encoded JWT refresh token
     """
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    days = 30 if remember_me else settings.REFRESH_TOKEN_EXPIRE_DAYS
+    expire = datetime.utcnow() + timedelta(days=days)
     to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
+
+
+def create_password_reset_token(email: str) -> str:
+    """
+    Create a short-lived JWT for password reset (1 hour).
+    
+    Args:
+        email: The email address to encode
+    
+    Returns:
+        Signed JWT reset token
+    """
+    expire = datetime.utcnow() + timedelta(hours=1)
+    data = {"sub": email, "exp": expire, "type": "reset"}
+    return jwt.encode(data, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def verify_password_reset_token(token: str) -> Optional[str]:
+    """
+    Verify a password reset JWT and return the email, or None if invalid/expired.
+    """
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("type") != "reset":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
 
 
 def verify_token(token: str, token_type: str = "access") -> Optional[dict]:

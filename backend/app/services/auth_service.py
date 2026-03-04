@@ -1,3 +1,6 @@
+"""
+Authentication Service
+"""
 from datetime import datetime
 from typing import Optional
 from fastapi import HTTPException, status
@@ -7,7 +10,9 @@ from app.core.security import (
     get_password_hash,
     verify_password,
     create_access_token,
-    create_refresh_token
+    create_refresh_token,
+    create_password_reset_token,
+    verify_password_reset_token,
 )
 from app.core.cache import cache
 from app.core.session import session_manager
@@ -15,13 +20,23 @@ from app.core.google_auth import verify_google_token
 from app.models.user import User, UserRole
 from app.models.student import Student
 from app.models.admin import Admin
-from app.schemas.auth import StudentRegister, UserLogin
-from app.api.v1.auth import ProfileUpdateRequest, PasswordChangeRequest, CompleteGoogleProfileRequest
+from app.schemas.auth import (
+    StudentRegister, UserLogin,
+    ForgotPasswordRequest, ResetPasswordRequest, SetPasswordRequest,
+    ProfileUpdateRequest, PasswordChangeRequest, CompleteGoogleProfileRequest,
+)
+from app.services.email_service import (
+    send_password_reset_email,
+    send_password_set_notification,
+    send_password_changed_notification,
+)
 
 
 class AuthService:
     def __init__(self, db: Session):
         self.db = db
+
+    # ── Existing methods (unchanged) ─────────────────────────────────────────
 
     def register_student(self, student_data: StudentRegister) -> dict:
         existing_user = self.db.query(User).filter(User.email == student_data.email).first()
@@ -96,7 +111,10 @@ class AuthService:
         self.db.commit()
         
         access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
-        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+        refresh_token = create_refresh_token(
+            data={"sub": str(user.id)},
+            remember_me=credentials.remember_me
+        )
         
         try:
             await session_manager.create_session(
@@ -129,9 +147,8 @@ class AuthService:
         google_id = google_info["google_id"]
         email = google_info["email"]
         full_name = google_info["full_name"]
-        picture = google_info["picture"] or None  # treat empty string as no picture
+        picture = google_info["picture"] or None
 
-        # Try to find existing user by google_id first, then by email
         user = self.db.query(User).filter(User.google_id == google_id).first()
 
         if not user:
@@ -140,22 +157,19 @@ class AuthService:
         needs_profile = False
 
         if user:
-            # Link google_id if this is an existing email/password user
             if not user.google_id:
                 user.google_id = google_id
                 user.auth_provider = "google"
 
-            # Always sync the profile picture from Google
             if user.student and picture:
                 user.student.profile_photo_url = picture
 
             user.last_login = datetime.utcnow()
             self.db.commit()
         else:
-            # New user — create account and partial student profile
             user = User(
                 email=email,
-                password_hash=None,  # Google-only accounts have no password
+                password_hash=None,
                 role=UserRole.STUDENT,
                 is_active=True,
                 is_verified=True,
@@ -166,15 +180,14 @@ class AuthService:
             self.db.add(user)
             self.db.flush()
 
-            # Create a partial student profile with just the info Google provides
             student = Student(
                 user_id=user.id,
                 full_name=full_name or email.split("@")[0],
                 phone_number="",
                 school="",
                 district="",
-                grade=11,  # Default, will be updated in profile completion
-                profile_photo_url=picture or None,  # None if Google has no picture
+                grade=11,
+                profile_photo_url=picture or None,
                 has_paid=False,
             )
             self.db.add(student)
@@ -230,7 +243,7 @@ class AuthService:
         cache_key = f"user_profile:{current_user.id}"
         cached_data = await cache.get(cache_key)
         
-        if cached_data:
+        if cached_data and "has_password" in cached_data:
             await session_manager.set_user_active(str(current_user.id))
             return cached_data
         
@@ -240,6 +253,8 @@ class AuthService:
             "role": current_user.role.value,
             "is_active": current_user.is_active,
             "is_verified": current_user.is_verified,
+            "auth_provider": current_user.auth_provider,
+            "has_password": current_user.password_hash is not None,
             "last_login": current_user.last_login.isoformat() if current_user.last_login else None,
             "created_at": current_user.created_at.isoformat() if current_user.created_at else None
         }
@@ -322,6 +337,12 @@ class AuthService:
         return {"message": "Profile updated successfully"}
 
     def change_password(self, request: PasswordChangeRequest, current_user: User) -> dict:
+        """Change password — requires current password verification."""
+        if not current_user.password_hash:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No password set. Use 'Set Password' option."
+            )
         if not verify_password(request.current_password, current_user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -332,3 +353,107 @@ class AuthService:
         self.db.commit()
 
         return {"message": "Password updated successfully"}
+
+    # ── New Password Management Methods ──────────────────────────────────────
+
+    def forgot_password(self, request: ForgotPasswordRequest) -> dict:
+        """
+        Send a password reset email.
+        Always returns the same message to prevent user enumeration.
+        """
+        success_msg = {
+            "message": "If an account with that email exists, a reset link has been sent."
+        }
+
+        user = self.db.query(User).filter(User.email == request.email).first()
+        if not user:
+            return success_msg  # Don't reveal whether email exists
+
+        # Generate JWT reset token
+        token = create_password_reset_token(user.email)
+
+        # Get user name for email personalisation
+        user_name = None
+        if user.student:
+            user_name = user.student.full_name
+        elif user.admin:
+            user_name = user.admin.full_name
+
+        try:
+            send_password_reset_email(user.email, token, user_name)
+        except Exception as e:
+            print(f"[AuthService] forgot_password email error: {e}")
+
+        return success_msg
+
+    def reset_password(self, request: ResetPasswordRequest) -> dict:
+        """
+        Reset the user's password using the token from the reset email.
+        The token is a signed JWT — no DB storage needed.
+        """
+        email = verify_password_reset_token(request.token)
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset link. Please request a new one."
+            )
+
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found."
+            )
+
+        user.password_hash = get_password_hash(request.new_password)
+        self.db.commit()
+
+        # Notify user
+        user_name = None
+        if user.student:
+            user_name = user.student.full_name
+        elif user.admin:
+            user_name = user.admin.full_name
+        try:
+            send_password_changed_notification(user.email, user_name)
+        except Exception as e:
+            print(f"[AuthService] reset_password notification error: {e}")
+
+        return {"message": "Password reset successfully. You can now log in."}
+
+    def set_password(self, request: SetPasswordRequest, current_user: User) -> dict:
+        """
+        Set a password for a Google-only account (no existing password).
+        After setting, the user can log in with either Google or email+password.
+        """
+        if current_user.password_hash:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A password is already set. Use 'Change Password' instead."
+            )
+
+        current_user.password_hash = get_password_hash(request.new_password)
+        self.db.commit()
+
+        # Invalidate cache so /auth/me returns updated has_password
+        # (fire-and-forget — best effort)
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(cache.delete(f"user_profile:{current_user.id}"))
+        except Exception:
+            pass
+
+        # Notify user
+        user_name = None
+        if current_user.student:
+            user_name = current_user.student.full_name
+        elif current_user.admin:
+            user_name = current_user.admin.full_name
+        try:
+            send_password_set_notification(current_user.email, user_name)
+        except Exception as e:
+            print(f"[AuthService] set_password notification error: {e}")
+
+        return {"message": "Password set successfully. You can now log in with email and password."}

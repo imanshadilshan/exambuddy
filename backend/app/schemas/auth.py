@@ -10,6 +10,7 @@ class UserLogin(BaseModel):
     """Login request schema"""
     email: EmailStr
     password: str = Field(..., min_length=6)
+    remember_me: bool = False
 
 
 class StudentRegister(BaseModel):
@@ -48,3 +49,61 @@ class TokenData(BaseModel):
     user_id: str
     email: Optional[str] = None
     role: Optional[str] = None
+
+
+# ── Password Management Schemas ──────────────────────────────────────────────
+
+class ForgotPasswordRequest(BaseModel):
+    """Forgot password — request a reset email"""
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Reset password using a token from the email link"""
+    token: str
+    new_password: str = Field(..., min_length=8, description="Minimum 8 characters")
+    confirm_password: str = Field(..., min_length=8)
+
+    @validator('confirm_password')
+    def passwords_match(cls, v, values):
+        if 'new_password' in values and v != values['new_password']:
+            raise ValueError('Passwords do not match')
+        return v
+
+
+class SetPasswordRequest(BaseModel):
+    """Set a password for the first time (Google-only accounts)"""
+    new_password: str = Field(..., min_length=8, description="Minimum 8 characters")
+    confirm_password: str = Field(..., min_length=8)
+
+    @validator('confirm_password')
+    def passwords_match(cls, v, values):
+        if 'new_password' in values and v != values['new_password']:
+            raise ValueError('Passwords do not match')
+        return v
+
+
+# ── Shared request models (used by auth routes + auth service) ────────────────
+
+class ProfileUpdateRequest(BaseModel):
+    """Update user profile fields"""
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    school: Optional[str] = None
+    district: Optional[str] = None
+    grade: Optional[int] = None
+
+
+class PasswordChangeRequest(BaseModel):
+    """Change password — requires current password"""
+    current_password: str
+    new_password: str
+
+
+class CompleteGoogleProfileRequest(BaseModel):
+    """One-time step for new Google users"""
+    phone_number: str
+    school: str
+    district: str
+    grade: int
+

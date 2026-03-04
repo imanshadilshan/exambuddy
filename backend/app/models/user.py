@@ -37,8 +37,14 @@ class User(Base):
     google_id = Column(String, unique=True, nullable=True, index=True)
     auth_provider = Column(String, default="email", nullable=False)  # 'email' | 'google'
     needs_profile_completion = Column(Boolean, default=False)  # True for new Google users
+
+    # Password reset fields (nullable — only set during an active reset request)
+    reset_token = Column(String, nullable=True, index=True)          # SHA-256 hash of raw JWT
+    reset_token_expires = Column(DateTime(timezone=True), nullable=True)
+
     student = relationship("Student", back_populates="user", uselist=False, cascade="all, delete-orphan")
     admin = relationship("Admin", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
     
     def __repr__(self):
         return f"<User {self.email} ({self.role})>"

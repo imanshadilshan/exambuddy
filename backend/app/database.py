@@ -11,6 +11,10 @@ engine = create_engine(
     settings.DATABASE_URL,
     echo=settings.DB_ECHO,
     pool_pre_ping=True,
+    connect_args={
+        "options": "-c statement_timeout=30000",
+        "prepare_threshold": None,   # Disable prepared statement caching (avoids stale plan errors after migrations)
+    },
 )
 
 # Create session factory

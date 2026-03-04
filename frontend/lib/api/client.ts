@@ -18,7 +18,8 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('accessToken')
+      // Check sessionStorage first (default/non-remember-me), then localStorage (remember-me)
+      const token = sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken')
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
       }
@@ -44,10 +45,10 @@ apiClient.interceptors.response.use(
 
       try {
         if (typeof window !== 'undefined') {
-          const refreshToken = localStorage.getItem('refreshToken')
+          const refreshToken = sessionStorage.getItem('refreshToken') || localStorage.getItem('refreshToken')
           if (refreshToken) {
-            // TODO: Implement token refresh endpoint
-            // For now, just logout
+            sessionStorage.removeItem('accessToken')
+            sessionStorage.removeItem('refreshToken')
             localStorage.removeItem('accessToken')
             localStorage.removeItem('refreshToken')
             window.location.href = '/login'

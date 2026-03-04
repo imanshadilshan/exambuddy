@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
-import { fetchCurrentUser, updateProfile, updateProfilePhoto } from '@/lib/redux/slices/authSlice'
+import { fetchCurrentUser, updateProfile, updateProfilePhoto, setPasswordThunk } from '@/lib/redux/slices/authSlice'
 import { fetchMyEnrollments } from '@/lib/redux/slices/studentDashboardSlice'
 import { getInitials } from '@/lib/utils/initials'
 
@@ -28,6 +28,12 @@ export default function ProfilePage() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Password state
+  const [pwForm, setPwForm] = useState({ new_password: '', confirm_password: '' })
+  const [pwError, setPwError] = useState('')
+  const [pwSuccess, setPwSuccess] = useState('')
+  const [pwLoading, setPwLoading] = useState(false)
 
   const [form, setForm] = useState({
     full_name: '',
@@ -53,10 +59,11 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login')
-    } else if (!user) {
+    } else {
+      // Always fetch fresh so auth_provider + has_password are current
       dispatch(fetchCurrentUser())
     }
-  }, [isAuthenticated, user, dispatch, router])
+  }, [isAuthenticated, dispatch, router])
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -380,6 +387,104 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+
+          {/* ── Password & Security ─────────────────────────────── */}
+          {user?.has_password !== undefined && (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Password &amp; Security</h3>
+
+              {!user.has_password ? (
+                // Set Password — Google-only users
+                <>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Your account uses Google Sign-In and has no password yet.
+                    Set a password to also log in with email &amp; password.
+                  </p>
+                  {pwError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{pwError}</div>
+                  )}
+                  {pwSuccess && (
+                    <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-4 text-sm">{pwSuccess}</div>
+                  )}
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault()
+                      setPwError('')
+                      if (pwForm.new_password !== pwForm.confirm_password) {
+                        setPwError('Passwords do not match.')
+                        return
+                      }
+                      if (pwForm.new_password.length < 8) {
+                        setPwError('Password must be at least 8 characters.')
+                        return
+                      }
+                      setPwLoading(true)
+                      const result = await dispatch(setPasswordThunk(pwForm))
+                      setPwLoading(false)
+                      if (setPasswordThunk.fulfilled.match(result)) {
+                        setPwSuccess('Password set! You can now log in with email + password.')
+                        setPwForm({ new_password: '', confirm_password: '' })
+                        dispatch(fetchCurrentUser())
+                      } else {
+                        setPwError((result.payload as string) || 'Failed to set password.')
+                      }
+                    }}
+                    className="space-y-3"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                        <input
+                          id="set-new-password"
+                          type="password"
+                          required
+                          minLength={8}
+                          placeholder="At least 8 characters"
+                          value={pwForm.new_password}
+                          onChange={e => setPwForm(p => ({ ...p, new_password: e.target.value }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                        <input
+                          id="set-confirm-password"
+                          type="password"
+                          required
+                          minLength={8}
+                          placeholder="Repeat password"
+                          value={pwForm.confirm_password}
+                          onChange={e => setPwForm(p => ({ ...p, confirm_password: e.target.value }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      id="set-password-submit-btn"
+                      type="submit"
+                      disabled={pwLoading}
+                      className="mt-1 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
+                    >
+                      {pwLoading ? 'Setting…' : 'Set Password'}
+                    </button>
+                  </form>
+                </>
+              ) : (
+                // Change Password — email users (or Google users who already set a password)
+                <>
+                  <p className="text-sm text-gray-500 mb-4">
+                    A password is set on your account. To change it, we'll send a reset link to <strong>{user.email}</strong>.
+                  </p>
+                  <Link
+                    href="/forgot-password"
+                    className="inline-block px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors"
+                  >
+                    Send Change Password Link
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Enrollments */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">

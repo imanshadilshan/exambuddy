@@ -3,6 +3,7 @@ import apiClient from './client'
 export interface LoginCredentials {
   email: string
   password: string
+  remember_me?: boolean
 }
 
 export interface RegisterData {
@@ -51,5 +52,29 @@ export const updateProfilePhoto = async (data: FormData) => {
   const response = await apiClient.post('/api/v1/auth/profile-photo', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+  return response.data
+}
+
+// ── Password Management ───────────────────────────────────────────────────────
+
+export const forgotPassword = async (data: { email: string }) => {
+  const response = await apiClient.post('/api/v1/auth/forgot-password', data)
+  return response.data
+}
+
+export const resetPassword = async (data: {
+  token: string
+  new_password: string
+  confirm_password: string
+}) => {
+  const response = await apiClient.post('/api/v1/auth/reset-password', data)
+  return response.data
+}
+
+export const setPassword = async (data: {
+  new_password: string
+  confirm_password: string
+}) => {
+  const response = await apiClient.post('/api/v1/auth/set-password', data)
   return response.data
 }

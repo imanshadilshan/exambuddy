@@ -17,6 +17,7 @@ export default function LoginPage() {
     password: '',
   })
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -45,6 +46,7 @@ export default function LoginPage() {
       const loginPayload = {
         email: formData.email.trim(),
         password: formData.password,
+        remember_me: rememberMe,
       }
 
       await dispatch(login(loginPayload)).unwrap()
@@ -173,6 +175,8 @@ export default function LoginPage() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
                   className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-gray-600 cursor-pointer">
@@ -181,9 +185,9 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <a href="#" className="font-medium text-teal-600 hover:text-teal-700">
+                <Link href="/forgot-password" className="font-medium text-teal-600 hover:text-teal-700">
                   Forgot Password?
-                </a>
+                </Link>
               </div>
             </div>
 
