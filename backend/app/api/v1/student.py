@@ -1,17 +1,14 @@
 """
 Student API Routes - Course enrollment and exam access
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, timedelta, timezone
 
 from app.database import get_db
 from app.models.user import User
 from app.schemas.course import CourseResponse
-from app.schemas.exam import ExamResponse
 from app.schemas.exam_engine import (
     StartExamResponse,
     SubmitExamRequest,
@@ -19,7 +16,6 @@ from app.schemas.exam_engine import (
     ExamRankResponse,
 )
 from app.dependencies import get_current_user, get_optional_user
-from app.core.security import verify_token
 from app.services.course_service import CourseService
 from app.services.exam_service import ExamService
 from app.services.student_service import StudentService

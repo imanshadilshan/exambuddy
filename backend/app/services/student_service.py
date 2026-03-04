@@ -17,7 +17,6 @@ class StudentService:
         self.db = db
 
     def get_my_enrollments(self, current_user: User) -> dict:
-        from app.models.exam_attempt import ExamAttempt, ExamAttemptStatus
 
         course_enrollments = self.db.query(CourseEnrollment).options(
             joinedload(CourseEnrollment.course)
@@ -211,8 +210,6 @@ class StudentService:
             .group_by(ExamAttempt.user_id, ExamAttempt.exam_id)
             .subquery()
         )
-
-        from app.models.student import Student
 
         # Subquery 2: compute ranks before applying limits
         ranked_sq = (
