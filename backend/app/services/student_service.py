@@ -261,6 +261,7 @@ class StudentService:
                 pct = round((row.score / row.total_questions) * 100)
                 
             result.append({
+                "user_id": str(row.user_id),
                 "rank": row.island_rank,
                 "district_rank": row.district_rank,
                 "full_name": row.full_name,
@@ -270,7 +271,7 @@ class StudentService:
                 "score": pct,
                 "time_taken_seconds": row.time_taken,
                 "attempts": 1,
-                "is_current_user": (current_user is not None and str(row.user_id) == str(current_user.id)),
+                "is_current_user": False,
             })
 
         return result

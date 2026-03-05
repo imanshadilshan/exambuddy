@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
 
+from fastapi.concurrency import run_in_threadpool
+from app.core.cache import cache
+
 from app.database import get_db
 from app.models.user import User
 from app.schemas.course import CourseResponse
@@ -27,10 +30,19 @@ router = APIRouter(prefix="/student", tags=["Student"])
 
 
 @router.get("/stats")
-def get_platform_stats(db: Session = Depends(get_db)):
+async def get_platform_stats(db: Session = Depends(get_db)):
     """Public platform-wide statistics for the homepage."""
+    cache_key = "student:platform_stats"
+    cached_stats = await cache.get(cache_key)
+    if cached_stats:
+        return cached_stats
+        
     service = CourseService(db)
-    return service.get_platform_stats()
+    stats = await run_in_threadpool(service.get_platform_stats)
+    
+    if stats:
+        await cache.set(cache_key, stats, expire=300)
+    return stats
 
 
 @router.get("/courses", response_model=List[CourseResponse])
@@ -147,16 +159,25 @@ def get_exam_rankings(
 
 
 @router.get("/rankings/exams")
-def get_ranking_exams(
+async def get_ranking_exams(
     db: Session = Depends(get_db),
 ):
     """Return distinct exams that have at least one completed exam attempt."""
+    cache_key = "student:ranking_exams"
+    cached_exams = await cache.get(cache_key)
+    if cached_exams:
+        return cached_exams
+        
     service = StudentService(db)
-    return service.get_ranking_exams()
+    exams = await run_in_threadpool(service.get_ranking_exams)
+    
+    if exams is not None:
+        await cache.set(cache_key, exams, expire=60)
+    return exams
 
 
 @router.get("/rankings/leaderboard")
-def get_rankings_leaderboard(
+async def get_rankings_leaderboard(
     exam_id: str,
     district: Optional[str] = None,
     limit: int = 1000,
@@ -167,8 +188,41 @@ def get_rankings_leaderboard(
     Return the leaderboard for a given exam.
     """
     current_user = get_optional_user(request, db) if request else None
+    
+    dist_key = district.lower() if district else "all"
+    cache_key = f"student:leaderboard:{exam_id}:dist:{dist_key}:limit:{limit}"
+    
+    cached_board = await cache.get(cache_key)
+    
+    if cached_board:
+        if current_user:
+            user_id_str = str(current_user.id)
+            for row in cached_board:
+                row["is_current_user"] = (str(row.get("user_id")) == user_id_str)
+        else:
+            for row in cached_board:
+                row["is_current_user"] = False
+        return cached_board
+
     service = StudentService(db)
-    return service.get_rankings_leaderboard(exam_id, limit, current_user, district)
+    board = await run_in_threadpool(
+        service.get_rankings_leaderboard, exam_id, limit, None, district
+    )
+    
+    if board is None:
+        board = []
+        
+    await cache.set(cache_key, board, expire=60)
+        
+    if current_user:
+        user_id_str = str(current_user.id)
+        for row in board:
+            row["is_current_user"] = (str(row.get("user_id")) == user_id_str)
+    else:
+        for row in board:
+            row["is_current_user"] = False
+            
+    return board
 
 
 @router.get("/my-attempts")
