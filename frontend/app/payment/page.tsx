@@ -26,7 +26,7 @@ function PaymentContent() {
   const { user } = useAppSelector((state) => state.auth)
   const { isLoading: loading, error } = useAppSelector((state) => state.payment)
 
-  const [paymentMethod, setPaymentMethod] = useState<'payhere' | 'bank_slip'>('payhere')
+  const [paymentMethod, setPaymentMethod] = useState<'payhere' | 'bank_slip'>('bank_slip')
   const [payment, setPayment] = useState<PaymentResponse | null>(null)
   const [localError, setLocalError] = useState('')
 
@@ -113,33 +113,10 @@ function PaymentContent() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Payment Method</h2>
             
             <div className="space-y-3">
-              {/* PayHere Option */}
-              <label className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                paymentMethod === 'payhere' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-gray-300'
-              }`}>
-                <input
-                  type="radio"
-                  name="payment_method"
-                  value="payhere"
-                  checked={paymentMethod === 'payhere'}
-                  onChange={(e) => setPaymentMethod(e.target.value as 'payhere')}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-semibold text-gray-900">PayHere</span>
-                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">Instant Activation</span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Pay securely with credit/debit card, bank transfer, or mobile wallet. Your account will be activated immediately after payment.
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <img src="/images/visa.png" alt="Visa" className="h-6" />
-                    <img src="/images/mastercard.png" alt="Mastercard" className="h-6" />
-                    <img src="/images/amex.png" alt="Amex" className="h-6" />
-                  </div>
-                </div>
-              </label>
+              {/* PayHere Option (Temporarily Disabled) */}
+              {/* <label className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                ... (hidden for integration)
+              }`}> ... </label> */}
 
               {/* Bank Slip Option */}
               <label className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
@@ -161,11 +138,38 @@ function PaymentContent() {
                   <p className="text-sm text-gray-600 mb-2">
                     Deposit to our bank account and upload the slip. Account will be activated after admin verification (usually within 24 hours).
                   </p>
-                  <div className="text-xs bg-white border border-gray-200 rounded p-2">
-                    <p className="font-medium text-gray-900 mb-1">Bank Details:</p>
-                    <p className="text-gray-600">Bank: Commercial Bank</p>
-                    <p className="text-gray-600">Account: 1234567890</p>
-                    <p className="text-gray-600">Name: ExamBuddy (Pvt) Ltd</p>
+                  {/* Modern Bank Card UI */}
+                  <div className="mt-5 relative overflow-hidden bg-gradient-to-br from-teal-800 to-teal-900 rounded-2xl p-6 text-white shadow-xl sm:w-96 border border-teal-700/50">
+                    <div className="absolute top-0 right-0 -mr-8 -mt-8 w-40 h-40 rounded-full bg-white opacity-5 mix-blend-overlay"></div>
+                    <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-24 h-24 rounded-full bg-white opacity-5 mix-blend-overlay"></div>
+                    
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-6">
+                        <div>
+                          <p className="text-teal-200/80 text-xs uppercase tracking-wider font-semibold mb-1">Direct Bank Transfer</p>
+                          <p className="font-bold text-xl tracking-wide text-white">Commercial Bank</p>
+                        </div>
+                        <svg className="w-10 h-10 text-teal-200/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                      </div>
+                      
+                      <div className="mb-6">
+                        <p className="text-teal-200/80 text-xs uppercase tracking-wider mb-1">Account Number</p>
+                        <p className="font-mono text-2xl tracking-[0.2em] font-medium text-teal-50">1234 5678 90</p>
+                      </div>
+                      
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-teal-200/80 text-xs uppercase tracking-wider mb-1">Account Name</p>
+                          <p className="font-medium tracking-wide text-teal-50">ExamBuddy (Pvt) Ltd</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-teal-200/80 text-xs uppercase tracking-wider mb-1">Branch</p>
+                          <p className="font-medium text-teal-50">City Office</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </label>
