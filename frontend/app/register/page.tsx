@@ -113,8 +113,38 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8 py-12">
-      <div className="bg-white rounded-lg shadow-lg p-8 md:p-12 max-w-4xl w-full">
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Left side - Promotional Content */}
+      <div className="hidden lg:flex flex-1 relative items-center justify-center p-12 bg-gray-900 overflow-hidden">
+        {/* Cinematic Background Image */}
+        <div 
+          className="absolute inset-0 z-0 opacity-80 mix-blend-overlay"
+          style={{
+            backgroundImage: "url('/images/register-hero.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 z-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent" />
+        
+        {/* Glassmorphism Content Card */}
+        <div className="relative z-10 max-w-lg w-full mt-auto mb-12 transform transition-all duration-700 hover:scale-[1.02]">
+          <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-8 shadow-2xl">
+            <h2 className="text-3xl font-bold mb-4 leading-tight text-white drop-shadow-md">
+              Start Your Journey.
+            </h2>
+            <p className="text-gray-200 text-lg leading-relaxed">
+              Create your account to access personalized study tools, track your progress, and rise to the top of the national leaderboards.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Right side - Registration Form */}
+      <div className="flex-1 flex items-center justify-center p-8 lg:p-12 overflow-y-auto">
+        <div className="w-full max-w-xl">
         <div className="mb-8">
           <Link href="/" className="flex items-center gap-3 mb-6 hover:opacity-80 transition-opacity inline-flex">
             <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center text-xl">
@@ -394,6 +424,7 @@ export default function RegisterPage() {
               Sign in here
             </Link>
           </p>
+        </div>
         </div>
       </div>
     </div>
