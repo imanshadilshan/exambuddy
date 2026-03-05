@@ -1,7 +1,7 @@
 """
 Authentication API Routes
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
@@ -18,6 +18,7 @@ from app.models.user import User
 from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
 from app.core.cache import cache
 from app.core.session import session_manager
+from app.core.rate_limit import limiter
 from app.dependencies import get_current_user
 from app.services.auth_service import AuthService
 
@@ -42,7 +43,9 @@ def register_student(
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     credentials: UserLogin,
     db: Session = Depends(get_db)
 ):
@@ -123,8 +126,10 @@ def change_password(
 # ── New Password Management Routes ────────────────────────────────────────────
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 def forgot_password(
-    request: ForgotPasswordRequest,
+    request: Request,
+    payload: ForgotPasswordRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -132,7 +137,7 @@ def forgot_password(
     Always returns HTTP 200 — never reveals whether the email is registered.
     """
     service = AuthService(db)
-    return service.forgot_password(request)
+    return service.forgot_password(payload)
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)

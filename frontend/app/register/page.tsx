@@ -43,6 +43,18 @@ export default function RegisterPage() {
     }))
   }
 
+  // Password validation tracking
+  const passedCriteria = {
+    length: formData.password.length >= 8,
+    uppercase: /[A-Z]/.test(formData.password),
+    lowercase: /[a-z]/.test(formData.password),
+    number: /\d/.test(formData.password),
+    special: /[@$!%*?&#]/.test(formData.password),
+  }
+  const strengthScore = Object.values(passedCriteria).filter(Boolean).length
+  const isPasswordValid = strengthScore === 5
+  const doPasswordsMatch = formData.password === formData.confirm_password && formData.password.length > 0
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -211,6 +223,45 @@ export default function RegisterPage() {
                   )}
                 </button>
               </div>
+              
+              {/* Modern Password Strength Meter */}
+              {formData.password && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex gap-1 h-1.5">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <div
+                        key={level}
+                        className={`flex-1 rounded-full transition-colors duration-300 ${
+                          strengthScore >= level
+                            ? strengthScore < 3
+                              ? 'bg-red-500'
+                              : strengthScore < 5
+                              ? 'bg-yellow-500'
+                              : 'bg-green-500'
+                            : 'bg-gray-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-xs text-gray-500 grid grid-cols-2 gap-1 mt-2">
+                    <div className={`flex items-center gap-1 ${passedCriteria.length ? 'text-green-600' : ''}`}>
+                      {passedCriteria.length ? '✓' : '○'} 8+ characters
+                    </div>
+                    <div className={`flex items-center gap-1 ${passedCriteria.uppercase ? 'text-green-600' : ''}`}>
+                      {passedCriteria.uppercase ? '✓' : '○'} Uppercase
+                    </div>
+                    <div className={`flex items-center gap-1 ${passedCriteria.lowercase ? 'text-green-600' : ''}`}>
+                      {passedCriteria.lowercase ? '✓' : '○'} Lowercase
+                    </div>
+                    <div className={`flex items-center gap-1 ${passedCriteria.number ? 'text-green-600' : ''}`}>
+                      {passedCriteria.number ? '✓' : '○'} Number
+                    </div>
+                    <div className={`flex items-center gap-1 col-span-2 ${passedCriteria.special ? 'text-green-600' : ''}`}>
+                      {passedCriteria.special ? '✓' : '○'} Special character (@$!%*?&#)
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -245,6 +296,9 @@ export default function RegisterPage() {
                   )}
                 </button>
               </div>
+              {formData.confirm_password && !doPasswordsMatch && (
+                <p className="text-xs text-red-500 mt-1">Passwords do not match.</p>
+              )}
             </div>
           </div>
 
@@ -318,7 +372,7 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || !isPasswordValid || !doPasswordsMatch}
             className="w-full bg-teal-600 text-white py-3 rounded-lg font-medium text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (

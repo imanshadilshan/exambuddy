@@ -4,6 +4,20 @@ Authentication Schemas
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional
 from datetime import datetime
+import re
+
+def check_password_strength(password: str) -> str:
+    if len(password) < 8:
+        raise ValueError('Password must be at least 8 characters long')
+    if not re.search(r'[A-Z]', password):
+        raise ValueError('Password must contain at least one uppercase letter')
+    if not re.search(r'[a-z]', password):
+        raise ValueError('Password must contain at least one lowercase letter')
+    if not re.search(r'\d', password):
+        raise ValueError('Password must contain at least one number')
+    if not re.search(r'[@$!%*?&#]', password):
+        raise ValueError('Password must contain at least one special character (@$!%*?&#)')
+    return password
 
 
 class UserLogin(BaseModel):
@@ -24,6 +38,10 @@ class StudentRegister(BaseModel):
     district: str = Field(..., min_length=2, max_length=100)
     grade: int = Field(..., ge=10, le=13, description="Grade must be 10, 11, 12, or 13")
     
+    @validator('password')
+    def validate_password_strength(cls, v):
+        return check_password_strength(v)
+
     @validator('confirm_password')
     def passwords_match(cls, v, values):
         if 'password' in values and v != values['password']:
@@ -64,6 +82,10 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, description="Minimum 8 characters")
     confirm_password: str = Field(..., min_length=8)
 
+    @validator('new_password')
+    def validate_password_strength(cls, v):
+        return check_password_strength(v)
+
     @validator('confirm_password')
     def passwords_match(cls, v, values):
         if 'new_password' in values and v != values['new_password']:
@@ -75,6 +97,10 @@ class SetPasswordRequest(BaseModel):
     """Set a password for the first time (Google-only accounts)"""
     new_password: str = Field(..., min_length=8, description="Minimum 8 characters")
     confirm_password: str = Field(..., min_length=8)
+
+    @validator('new_password')
+    def validate_password_strength(cls, v):
+        return check_password_strength(v)
 
     @validator('confirm_password')
     def passwords_match(cls, v, values):

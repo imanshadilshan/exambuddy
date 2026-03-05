@@ -9,6 +9,7 @@ import { getInitials } from '@/lib/utils/initials'
 
 export default function ProfileDropdown() {
   const [isOpen, setIsOpen] = useState(false)
+  const [imageError, setImageError] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const dispatch = useAppDispatch()
@@ -43,10 +44,11 @@ export default function ProfileDropdown() {
       >
         {/* Profile Image */}
         <div className="relative">
-          {user?.profile?.profile_photo_url ? (
+          {user?.profile?.profile_photo_url && !imageError ? (
             <img
               src={user.profile.profile_photo_url}
               alt={displayName}
+              onError={() => setImageError(true)}
               className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
             />
           ) : (
