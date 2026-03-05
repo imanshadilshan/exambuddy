@@ -3,7 +3,7 @@ Authentication Service
 """
 from datetime import datetime
 from typing import Optional
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.security import (
@@ -162,7 +162,9 @@ class AuthService:
                 user.auth_provider = "google"
 
             if user.student and picture:
-                user.student.profile_photo_url = picture
+                # Only overwrite with Google picture if they haven't uploaded a custom one
+                if not user.student.profile_photo_public_id:
+                    user.student.profile_photo_url = picture
 
             user.last_login = datetime.utcnow()
             self.db.commit()
@@ -335,6 +337,67 @@ class AuthService:
             pass
 
         return {"message": "Profile updated successfully"}
+
+    async def update_profile_photo(self, file: UploadFile, current_user: User) -> dict:
+        if current_user.role != UserRole.STUDENT:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students can upload profile photos via this endpoint.")
+            
+        student = self.db.query(Student).filter(Student.user_id == current_user.id).first()
+        if not student:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student profile not found")
+
+        # Validate file type
+        if not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="File provided is not an image.")
+
+        # Import cloudinary here to avoid circular imports if settings change
+        import cloudinary
+        import cloudinary.uploader
+        from app.config import settings
+        
+        if not settings.CLOUDINARY_CLOUD_NAME or not settings.CLOUDINARY_API_KEY or not settings.CLOUDINARY_API_SECRET:
+            raise HTTPException(status_code=500, detail="Cloudinary credentials missing from environment.")
+
+        cloudinary.config(
+            cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+            api_key=settings.CLOUDINARY_API_KEY,
+            api_secret=settings.CLOUDINARY_API_SECRET,
+        )
+
+        try:
+            # Delete old image if it exists to prevent orphan files
+            if student.profile_photo_public_id:
+                try:
+                    cloudinary.uploader.destroy(student.profile_photo_public_id)
+                except Exception as e:
+                    print(f"[AuthService] Warning: Failed to delete old profile photo from Cloudinary: {e}")
+
+            # Upload new image
+            file_content = await file.read()
+            upload_result = cloudinary.uploader.upload(
+                file_content,
+                folder=f"{settings.CLOUDINARY_FOLDER}/profiles" if hasattr(settings, 'CLOUDINARY_FOLDER') else "exambuddy/profiles",
+                resource_type="image",
+                transformation=[
+                    {'width': 400, 'height': 400, 'crop': 'fill', 'gravity': 'face'} # Optimize for avatars
+                ]
+            )
+
+            # Update database
+            student.profile_photo_url = upload_result.get("secure_url")
+            student.profile_photo_public_id = upload_result.get("public_id")
+            self.db.commit()
+
+            # Clear cache so /auth/me fetches new data
+            try:
+                await cache.delete(f"user_profile:{current_user.id}")
+            except Exception:
+                pass
+
+            return {"profile_photo_url": student.profile_photo_url}
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
 
     def change_password(self, request: PasswordChangeRequest, current_user: User) -> dict:
         """Change password — requires current password verification."""

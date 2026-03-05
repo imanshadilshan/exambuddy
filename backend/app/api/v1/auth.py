@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
 from app.database import get_db
 from app.schemas.auth import (
     UserLogin, StudentRegister, Token,
@@ -89,6 +90,17 @@ async def update_profile(
     """Update the current user's profile fields."""
     service = AuthService(db)
     return await service.update_profile(profile_data, current_user)
+
+
+@router.post("/profile-photo")
+async def update_profile_photo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Upload a new profile picture and return the updated URL."""
+    service = AuthService(db)
+    return await service.update_profile_photo(file, current_user)
 
 
 @router.post("/google", response_model=dict)
