@@ -122,38 +122,57 @@ export default function Home() {
             <div className="hidden lg:flex relative z-10 w-full max-w-lg ml-auto h-[400px] items-center justify-center">
               
               {/* Glowing aura */}
-              <div className="absolute inset-0 bg-teal-400/20 blur-[100px] rounded-full" />
+              <div className="absolute inset-0 bg-teal-400/20 blur-[100px] rounded-full animate-pulse" />
 
               {/* Central Core */}
-              <div className="relative w-32 h-32 bg-gradient-to-br from-white to-teal-100 rounded-3xl shadow-[0_0_40px_rgba(20,184,166,0.5)] flex items-center justify-center animate-pulse duration-3000 rotate-12 z-20">
-                <div className="w-16 h-16 bg-gradient-to-tr from-teal-500 to-cyan-400 rounded-xl shadow-inner flex items-center justify-center -rotate-12">
-                   <span className="text-3xl filter drop-shadow-lg">🎓</span>
+              <div className="relative w-32 h-32 bg-gradient-to-br from-white to-teal-50 rounded-full shadow-[0_0_40px_rgba(20,184,166,0.4)] flex items-center justify-center z-20 animate-[bounce_4s_infinite]">
+                <div className="w-20 h-20 bg-gradient-to-tr from-teal-500 to-cyan-400 rounded-full shadow-inner flex items-center justify-center relative overflow-hidden">
+                  <div className="absolute inset-0 bg-white/20 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite]" />
+                  <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative z-10 drop-shadow-md">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                    <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                  </svg>
                 </div>
               </div>
 
               {/* Orbit 1 */}
-              <div className="absolute w-[280px] h-[280px] border border-white/10 rounded-full animate-spin [animation-duration:15s] z-10">
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg flex items-center justify-center rotate-45">
-                   <span className="text-lg -rotate-45 block">📚</span>
+              <div className="absolute w-[260px] h-[260px] border border-white/20 rounded-full animate-[spin_12s_linear_infinite] z-10">
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-xl flex items-center justify-center border border-white/20 animate-[spin_12s_linear_infinite_reverse]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                  </svg>
                 </div>
-                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-gradient-to-br from-orange-400 to-pink-500 rounded-full shadow-lg flex items-center justify-center backdrop-blur-md">
-                   <span className="text-xs">⚡</span>
+                <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full shadow-lg flex items-center justify-center border border-white/20 animate-[spin_12s_linear_infinite_reverse]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                  </svg>
                 </div>
               </div>
 
               {/* Orbit 2 */}
-              <div className="absolute w-[400px] h-[400px] border border-white/5 rounded-full animate-spin [animation-duration:25s] [animation-direction:reverse] z-0">
-                <div className="absolute top-1/2 -right-6 -translate-y-1/2 w-14 h-14 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl flex items-center justify-center -rotate-12">
-                   <span className="text-2xl animate-bounce">📊</span>
+              <div className="absolute w-[380px] h-[380px] border border-white/10 rounded-full animate-[spin_24s_linear_infinite_reverse] z-0">
+                <div className="absolute top-1/2 -right-8 -translate-y-1/2 w-16 h-16 bg-white/10 backdrop-blur-xl border border-white/30 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.1)] flex items-center justify-center animate-[spin_24s_linear_infinite]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#67e8f9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                  </svg>
                 </div>
-                <div className="absolute top-1/4 -left-4 w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full shadow-lg border-2 border-white/20 flex items-center justify-center hover:scale-110 transition-transform">
-                   <span className="text-lg">🎯</span>
+                <div className="absolute top-1/4 -left-6 w-12 h-12 bg-gradient-to-br from-fuchsia-500 to-pink-600 rounded-full shadow-lg border-2 border-white/20 flex items-center justify-center animate-[spin_24s_linear_infinite]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="6"/>
+                    <circle cx="12" cy="12" r="2"/>
+                  </svg>
                 </div>
               </div>
 
-              {/* Floating lines/particles */}
-              <div className="absolute top-10 right-10 w-20 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-50 -rotate-45" />
-              <div className="absolute bottom-20 left-10 w-32 h-1 bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-30 rotate-12" />
+              {/* Floating tech nodes */}
+              <div className="absolute top-1/4 right-1/4 w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_15px_#22d3ee] animate-ping" />
+              <div className="absolute bottom-1/3 left-1/4 w-2 h-2 bg-pink-400 rounded-full shadow-[0_0_10px_#f472b6] animate-pulse" />
+              <div className="absolute top-10 right-10 w-24 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-50 -rotate-45" />
+              <div className="absolute bottom-20 left-10 w-32 h-px bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-30 rotate-12" />
             </div>
           </div>
         </div>

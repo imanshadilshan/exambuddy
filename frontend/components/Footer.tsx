@@ -22,7 +22,7 @@ export default function Footer() {
               <span className="text-xl font-bold text-white">ExamBuddy</span>
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Sri Lanka&apos;s leading platform for O/L and A/L exam preparation — practice smarter, rank higher.
+              Sri Lanka&apos;s leading platform for O/L and A/L exam preparation - practice smarter, rank higher.
             </p>
           </div>
 
