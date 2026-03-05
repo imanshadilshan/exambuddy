@@ -246,25 +246,30 @@ export default function LoginPage() {
       </div>
 
       {/* Right side - Promotional Content */}
-      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-teal-900 via-teal-800 to-teal-700 items-center justify-center p-12">
-        <div className="max-w-md text-white">
-          <h2 className="text-4xl font-bold mb-6 leading-tight">
-            Revolutionize Your Learning with Smarter Technology
-          </h2>
-          <blockquote className="border-l-4 border-teal-400 pl-6 mb-8">
-            <p className="text-lg mb-4 italic">
-              "ExamBuddy has completely transformed our exam preparation process. It's reliable, efficient, and ensures our students are always top-notch."
+      <div className="hidden lg:flex flex-1 relative items-center justify-center p-12 bg-gray-900 overflow-hidden">
+        {/* Cinematic Background Image */}
+        <div 
+          className="absolute inset-0 z-0 opacity-80 mix-blend-overlay"
+          style={{
+            backgroundImage: "url('/images/login-hero.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        
+        {/* Gradient Overlay for text readability */}
+        <div className="absolute inset-0 z-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent" />
+        
+        {/* Glassmorphism Content Card */}
+        <div className="relative z-10 max-w-lg w-full mt-auto mb-12 transform transition-all duration-700 hover:scale-[1.02]">
+          <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-8 shadow-2xl">
+            <h2 className="text-3xl font-bold mb-4 leading-tight text-white drop-shadow-md">
+              Unlock Your Highest Potential.
+            </h2>
+            <p className="text-gray-200 text-lg leading-relaxed">
+              Join thousands of students mastering their exams through intelligent, personalized learning metrics and real-time national leaderboards.
             </p>
-            <footer className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center font-bold">
-                MC
-              </div>
-              <div>
-                <div className="font-semibold">Michael Carter</div>
-                <div className="text-sm text-teal-300">Teacher at Royal College</div>
-              </div>
-            </footer>
-          </blockquote>
+          </div>
         </div>
       </div>
     </div>
