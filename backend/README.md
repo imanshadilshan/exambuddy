@@ -6,7 +6,7 @@ FastAPI backend for the ExamBuddy educational platform.
 
 - Python 3.11 or higher
 - PostgreSQL (Neon DB)
-- Redis (for caching and background tasks)
+- Redis / Upstash (for caching and background tasks)
 - Cloudinary account (for file uploads)
 
 ## Setup Instructions
@@ -39,6 +39,7 @@ cp .env.example .env
 
 Then edit `.env` and add your:
 - **Neon DB connection string** (DATABASE_URL)
+- **Upstash Redis URL** (REDIS_URL, rediss://...)
 - **Cloudinary credentials** (CLOUDINARY_CLOUD_NAME, API_KEY, API_SECRET)
 - **PayHere credentials** (PAYHERE_MERCHANT_ID, MERCHANT_SECRET) - See [PAYHERE_INTEGRATION.md](PAYHERE_INTEGRATION.md)
 - **JWT secret keys** (generate random strings)

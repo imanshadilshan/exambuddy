@@ -22,8 +22,10 @@ async def get_redis() -> Optional[redis.Redis]:
         
     if redis_client is None:
         try:
+            redis_url = settings.redis_connection_url
+
             redis_client = await redis.from_url(
-                f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
+                redis_url,
                 password=settings.REDIS_PASSWORD if settings.REDIS_PASSWORD else None,
                 encoding="utf-8",
                 decode_responses=True,

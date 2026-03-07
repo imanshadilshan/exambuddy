@@ -71,7 +71,9 @@ FRONTEND_URL=http://localhost:3000
 BACKEND_URL=http://localhost:8000
 CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 
-# Redis
+# Redis (Upstash recommended)
+REDIS_URL=rediss://default:<password>@<your-upstash-endpoint>.upstash.io:6379
+# Optional local fallback
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
@@ -88,8 +90,8 @@ PAYHERE_MERCHANT_SECRET=your-merchant-secret
 PAYHERE_MODE=sandbox
 
 # Celery (Background Tasks)
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/0
+CELERY_BROKER_URL=rediss://default:<password>@<your-upstash-endpoint>.upstash.io:6379
+CELERY_RESULT_BACKEND=rediss://default:<password>@<your-upstash-endpoint>.upstash.io:6379
 ```
 
 **Get Your Credentials:**
