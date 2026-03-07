@@ -530,6 +530,18 @@ npm start
 - **Frontend**: Vercel, Netlify, or AWS Amplify
 - **File Storage**: Cloudinary (CDN)
 
+#### Render Deployment
+
+For detailed step-by-step instructions to deploy on Render, see the **Render Deployment Guide** above in the **Production Deployment** section.
+
+**Quick Summary**:
+1. Push project to GitHub
+2. Sign up at [render.com](https://render.com)
+3. Create Web Service from your repository
+4. Add environment variables (same as in `.env`)
+5. Deploy with start command: `gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000`
+6. Your backend will be live at: `https://exambuddy-backend.onrender.com`
+
 ---
 
 ## 📚 Additional Resources
